@@ -29,14 +29,14 @@ export async function loginWithWhatsApp(prevState: any, formData: FormData) {
   const phoneNumber = formatPhoneNumber(rawPhoneNumber);
 
   // Tentar enviar OTP via Supabase Auth diretamente
-  const { error: otpError } = await supabase.auth.signInWithOtp({
-    phone: phoneNumber,
-    options: {
-      shouldCreateUser: true,
-      channel: "sms",
-    },
-  });
-
+const { error: otpError } = await supabase.auth.signInWithOtp({
+  phone: phoneNumber,
+  options: {
+    shouldCreateUser: true,
+    channel: "whatsapp", // ALTERADO DE 'sms' PARA 'whatsapp'
+  },
+});
+// ...
   if (otpError) {
     console.error("Erro ao enviar OTP inicial:", otpError);
 
