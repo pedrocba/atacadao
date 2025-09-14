@@ -27,7 +27,7 @@ export async function loginWithWhatsApp(prevState: any, formData: FormData) {
           try {
             cookieStore.set({ name, value, ...options });
           } catch (error) {
-            // Ignorar erros em Server Actions, pois o cabeçalho pode já ter sido enviado
+            // Ignorar erros em Server Actions
           }
         },
         remove(name: string, options: CookieOptions) {
@@ -49,7 +49,6 @@ export async function loginWithWhatsApp(prevState: any, formData: FormData) {
 
   const phoneNumber = formatPhoneNumber(rawPhoneNumber);
 
-  // Tentar enviar OTP via Supabase Auth
   const { error: otpError } = await supabase.auth.signInWithOtp({
     phone: phoneNumber,
     options: {
@@ -60,22 +59,11 @@ export async function loginWithWhatsApp(prevState: any, formData: FormData) {
 
   if (otpError) {
     console.error("Erro ao enviar OTP inicial:", otpError);
-
     if (otpError.message.includes("rate limit")) {
       return { message: "Muitas tentativas. Tente novamente mais tarde." };
     }
-    
-    // Para outros erros, continuamos para a tela de verificação
-    console.log(
-      "Erro não fatal no envio de OTP, prosseguindo para /verificar-otp",
-      otpError.message
-    );
+    redirect(`/verificar-otp?phone=${encodeURIComponent(phoneNumber)}`);
+  } else {
     redirect(`/verificar-otp?phone=${encodeURIComponent(phoneNumber)}`);
   }
-
-  // Se não houve erro, redirecionar para a página de verificação
-  console.log(
-    "OTP enviado com sucesso, redirecionando para /verificar-otp"
-  );
-  redirect(`/verificar-otp?phone=${encodeURIComponent(phoneNumber)}`);
 }
