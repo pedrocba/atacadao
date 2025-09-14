@@ -27,7 +27,7 @@ export async function loginWithWhatsApp(prevState: any, formData: FormData) {
           try {
             cookieStore.set({ name, value, ...options });
           } catch (error) {
-            // Ignorar erros em Server Actions
+            // Ignorar erros em Server Actions, pois o cabeçalho pode já ter sido enviado
           }
         },
         remove(name: string, options: CookieOptions) {
