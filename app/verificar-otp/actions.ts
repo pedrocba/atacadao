@@ -30,7 +30,7 @@ export async function verifyOtpAction(
     await supabase.auth.verifyOtp({
       phone: phone,
       token: otp,
-      type: "sms",
+      type: "whatsapp",
     });
 
   if (verifyError) {
