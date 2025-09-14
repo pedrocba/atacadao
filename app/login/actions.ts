@@ -1,65 +1,111 @@
 "use server";
 
-import { createClient } from "@/utils/supabase/server";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-// Função simples para formatar o número para E.164 (ex: +5511999998888)
-// Adapte conforme a necessidade real de validação/formatação
-function formatPhoneNumber(phone: string): string {
-  // Remove caracteres não numéricos
-  const digits = phone.replace(/\D/g, "");
-  // Assume código do país 55 (Brasil) se não fornecido
-  if (digits.length === 10 || digits.length === 11) {
-    return `+55${digits}`;
-  }
-  // Retorna o número original se não parecer um número brasileiro válido
-  // Idealmente, teríamos validação mais robusta aqui
-  return phone;
+// Definição do estado que a action pode retornar
+interface VerifyOtpState {
+  message?: string | null;
+  phone?: string;
 }
 
-export async function loginWithWhatsApp(prevState: any, formData: FormData) {
-  const supabase = await createClient();
-
-  const rawPhoneNumber = formData.get("whatsapp") as string;
-
-  if (!rawPhoneNumber) {
-    return { message: "Número de WhatsApp é obrigatório." };
-  }
-
-  const phoneNumber = formatPhoneNumber(rawPhoneNumber);
-
-  // Tentar enviar OTP via Supabase Auth diretamente
-const { error: otpError } = await supabase.auth.signInWithOtp({
-  phone: phoneNumber,
-  options: {
-    shouldCreateUser: true,
-    channel: "whatsapp", // ALTERADO DE 'sms' PARA 'whatsapp'
-  },
-});
-// ...
-  if (otpError) {
-    console.error("Erro ao enviar OTP inicial:", otpError);
-
-    // Tratar erro de rate limit especificamente
-    if (otpError.message.includes("rate limit")) {
-      return { message: "Muitas tentativas. Tente novamente mais tarde." };
+// Função para criar um cliente Supabase com a chave de serviço (seguro no servidor)
+const createServiceRoleClient = () => {
+  const cookieStore = cookies();
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          // Apenas para leitura, não precisamos implementar 'set' aqui
+        },
+        remove(name: string, options: CookieOptions) {
+          // Apenas para leitura, não precisamos implementar 'remove' aqui
+        },
+      },
     }
+  );
+};
 
-    // Para QUALQUER outro erro (incluindo "User not found"),
-    // continuamos para a tela de verificação de OTP.
-    // A lógica em verifyOtpAction tratará o caso de usuário não existente
-    // redirecionando para /completar-cadastro.
-    console.log(
-      "Erro não fatal no envio de OTP ou usuário não encontrado, prosseguindo para /verificar-otp",
-      otpError.message // Loga a mensagem original para depuração
-    );
-    // Redireciona para a página de verificação de OTP
-    redirect(`/verificar-otp?phone=${encodeURIComponent(phoneNumber)}`);
+export async function verifyOtpAction(
+  prevState: VerifyOtpState,
+  formData: FormData
+): Promise<VerifyOtpState> {
+  const cookieStore = cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          try {
+            cookieStore.set({ name, value, ...options });
+          } catch (error) {
+            // Ignorar erros em Server Actions
+          }
+        },
+        remove(name: string, options: CookieOptions) {
+          try {
+            cookieStore.set({ name, value: '', ...options });
+          } catch (error) {
+            // Ignorar erros em Server Actions
+          }
+        },
+      },
+    }
+  );
+
+  const otp = formData.get("otp") as string;
+  const phone = prevState?.phone || (formData.get("phone") as string);
+
+  if (!phone) {
+    return { message: "Número de telefone não fornecido." };
+  }
+  if (!otp || otp.length !== 6) {
+    return { message: "Código OTP inválido.", phone: phone };
   }
 
-  // Se não houve erro no OTP, redirecionar para a página de verificação
-  console.log(
-    "OTP enviado com sucesso (ou erro tratável), redirecionando para /verificar-otp"
-  );
-  redirect(`/verificar-otp?phone=${encodeURIComponent(phoneNumber)}`);
+  const { data: { session }, error: verifyError } = await supabase.auth.verifyOtp({
+    phone: phone,
+    token: otp,
+    type: "whatsapp",
+  });
+
+  if (verifyError) {
+    console.error("Erro ao verificar OTP:", verifyError);
+    return { message: "Código inválido ou expirado. Tente novamente.", phone: phone };
+  }
+  if (!session?.user) {
+    return { message: "Erro ao obter informações do usuário.", phone: phone };
+  }
+
+  const user = session.user;
+  const supabaseService = createServiceRoleClient();
+  const { data: existingUser, error: userError } = await supabaseService
+    .from("usuarios")
+    .select("id, role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (userError) {
+    console.error("Erro CRÍTICO ao buscar usuário existente pós-OTP (Service Role):", userError);
+    return { message: "Erro ao verificar o cadastro. Contate o suporte.", phone: phone };
+  }
+
+  if (existingUser) {
+    if (existingUser.role === 'admin') {
+      redirect("/admin/dashboard");
+    }
+    redirect("/dashboard");
+  } else {
+    redirect(`/completar-cadastro?phone=${encodeURIComponent(phone)}`);
+  }
 }
