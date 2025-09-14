@@ -4,13 +4,12 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-// Definição do estado que a action pode retornar
 interface VerifyOtpState {
   message?: string | null;
   phone?: string;
 }
 
-// Função para criar um cliente Supabase com a chave de serviço (seguro no servidor)
+// Função para criar um cliente Supabase com a chave de serviço
 const createServiceRoleClient = () => {
   const cookieStore = cookies();
   return createServerClient(
@@ -21,12 +20,8 @@ const createServiceRoleClient = () => {
         get(name: string) {
           return cookieStore.get(name)?.value;
         },
-        set(name: string, value: string, options: CookieOptions) {
-          // Apenas para leitura, não precisamos implementar 'set' aqui
-        },
-        remove(name: string, options: CookieOptions) {
-          // Apenas para leitura, não precisamos implementar 'remove' aqui
-        },
+        set(name: string, value: string, options: CookieOptions) {},
+        remove(name: string, options: CookieOptions) {},
       },
     }
   );
@@ -48,16 +43,12 @@ export async function verifyOtpAction(
         set(name: string, value: string, options: CookieOptions) {
           try {
             cookieStore.set({ name, value, ...options });
-          } catch (error) {
-            // Ignorar erros em Server Actions
-          }
+          } catch (error) {}
         },
         remove(name: string, options: CookieOptions) {
           try {
             cookieStore.set({ name, value: '', ...options });
-          } catch (error) {
-            // Ignorar erros em Server Actions
-          }
+          } catch (error) {}
         },
       },
     }
@@ -96,15 +87,16 @@ export async function verifyOtpAction(
     .maybeSingle();
 
   if (userError) {
-    console.error("Erro CRÍTICO ao buscar usuário existente pós-OTP (Service Role):", userError);
+    console.error("Erro ao buscar usuário existente (Service Role):", userError);
     return { message: "Erro ao verificar o cadastro. Contate o suporte.", phone: phone };
   }
 
   if (existingUser) {
     if (existingUser.role === 'admin') {
       redirect("/admin/dashboard");
+    } else {
+      redirect("/dashboard");
     }
-    redirect("/dashboard");
   } else {
     redirect(`/completar-cadastro?phone=${encodeURIComponent(phone)}`);
   }
