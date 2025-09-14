@@ -1,6 +1,7 @@
 "use server";
 
-import { createClient } from "@/utils/supabase/server";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 // Definição do estado que a action pode retornar
@@ -9,11 +10,53 @@ interface VerifyOtpState {
   phone?: string;
 }
 
+// Função auxiliar para criar um cliente com a Service Role Key
+// Isso é seguro pois só é executado no servidor e as chaves não são expostas
+const createServiceRoleClient = () => {
+  const cookieStore = cookies();
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!, // Use a chave de serviço aqui
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
+          // Ações que modificam cookies devem ser tratadas com cuidado
+          // Para esta operação de leitura, podemos deixar em branco ou apenas registrar
+        },
+      },
+    }
+  );
+};
+
+
 export async function verifyOtpAction(
   prevState: VerifyOtpState,
   formData: FormData
 ): Promise<VerifyOtpState> {
-  const supabase = await createClient();
+  const cookieStore = cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options);
+            });
+          } catch (error) {
+            // Ignorar erros em Server Actions
+          }
+        },
+      },
+    }
+  );
 
   const otp = formData.get("otp") as string;
   const phone = prevState?.phone || (formData.get("phone") as string);
@@ -26,12 +69,12 @@ export async function verifyOtpAction(
     return { message: "Código OTP inválido.", phone: phone };
   }
 
-  const { data: verifyData, error: verifyError } =
-    await supabase.auth.verifyOtp({
-      phone: phone,
-      token: otp,
-      type: "whatsapp",
-    });
+  // A verificação do OTP continua usando o cliente normal (contexto do usuário)
+  const { data: { session }, error: verifyError } = await supabase.auth.verifyOtp({
+    phone: phone,
+    token: otp,
+    type: "whatsapp",
+  });
 
   if (verifyError) {
     console.error("Erro ao verificar OTP:", verifyError);
@@ -50,38 +93,34 @@ export async function verifyOtpAction(
     };
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    console.error(
-      "Usuário não encontrado após verificação de OTP bem-sucedida."
-    );
+  if (!session?.user) {
+    console.error("Usuário não encontrado após verificação de OTP bem-sucedida.");
     return { message: "Erro ao obter informações do usuário.", phone: phone };
   }
+  
+  const user = session.user;
 
-  const { data: existingUser, error: userError } = await supabase
+  // AGORA, USAMOS O CLIENTE DE SERVIÇO PARA BYPASSAR A RLS NESTA CONSULTA
+  const supabaseService = createServiceRoleClient();
+  const { data: existingUser, error: userError } = await supabaseService
     .from("usuarios")
-    .select("id")
+    .select("id, role")
     .eq("id", user.id)
-    .maybeSingle(); // Usar maybeSingle aqui
+    .maybeSingle();
 
   if (userError) {
-    // Não tratar PGRST116 como erro aqui, apenas logar erros reais
-    console.error("Erro ao buscar usuário existente pós-OTP:", userError);
-    return { message: "Erro ao verificar cadastro existente.", phone: phone };
+    console.error("Erro CRÍTICO ao buscar usuário existente pós-OTP (Service Role):", userError);
+    return { message: "Erro ao verificar o cadastro. Contate o suporte.", phone: phone };
   }
 
   if (existingUser) {
-    console.log(
-      `[Verify OTP Action] Usuário ${user.id} encontrado na tabela 'usuarios'. Login direto.`
-    );
-    return { message: "Login bem-sucedido." }; // Página redireciona
+    console.log(`[Verify OTP Action] Usuário ${user.id} encontrado. Redirecionando...`);
+    if (existingUser.role === 'admin') {
+      redirect("/admin/dashboard");
+    }
+    redirect("/dashboard");
   } else {
-    console.log(
-      `[Verify OTP Action] Usuário ${user.id} NÃO encontrado na tabela 'usuarios'. Redirecionando para /completar-cadastro.`
-    );
+    console.log(`[Verify OTP Action] Usuário ${user.id} NÃO encontrado. Redirecionando para /completar-cadastro.`);
     redirect(`/completar-cadastro?phone=${encodeURIComponent(phone)}`);
   }
 }
