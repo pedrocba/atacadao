@@ -3,9 +3,8 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { createClient } from "@/utils/supabase/server";
 
-// Função simples para formatar o número para E.164
+// Função para formatar o número de telefone
 function formatPhoneNumber(phone: string): string {
   const digits = phone.replace(/\D/g, "");
   if (digits.length === 10 || digits.length === 11) {
@@ -15,7 +14,32 @@ function formatPhoneNumber(phone: string): string {
 }
 
 export async function loginWithWhatsApp(prevState: any, formData: FormData) {
-const supabase = await createClient();
+  const cookieStore = cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          try {
+            cookieStore.set({ name, value, ...options });
+          } catch (error) {
+            // Ignorar erros em Server Actions, pois o cabeçalho pode já ter sido enviado
+          }
+        },
+        remove(name: string, options: CookieOptions) {
+          try {
+            cookieStore.set({ name, value: '', ...options });
+          } catch (error) {
+            // Ignorar erros em Server Actions
+          }
+        },
+      },
+    }
+  );
 
   const rawPhoneNumber = formData.get("whatsapp") as string;
 
@@ -25,7 +49,8 @@ const supabase = await createClient();
 
   const phoneNumber = formatPhoneNumber(rawPhoneNumber);
 
-  const { error: otpError } = await supabase.auth.signInWithOtp({
+  // Envia o OTP
+  await supabase.auth.signInWithOtp({
     phone: phoneNumber,
     options: {
       shouldCreateUser: true,
@@ -33,13 +58,6 @@ const supabase = await createClient();
     },
   });
 
-  if (otpError) {
-    console.error("Erro ao enviar OTP inicial:", otpError);
-    if (otpError.message.includes("rate limit")) {
-      return { message: "Muitas tentativas. Tente novamente mais tarde." };
-    }
-    redirect(`/verificar-otp?phone=${encodeURIComponent(phoneNumber)}`);
-  } else {
-    redirect(`/verificar-otp?phone=${encodeURIComponent(phoneNumber)}`);
-  }
+  // Redireciona para a página de verificação
+  redirect(`/verificar-otp?phone=${encodeURIComponent(phoneNumber)}`);
 }
