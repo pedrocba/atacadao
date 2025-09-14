@@ -10,27 +10,27 @@ interface VerifyOtpState {
   phone?: string;
 }
 
-// Função auxiliar para criar um cliente com a Service Role Key
-// Isso é seguro pois só é executado no servidor e as chaves não são expostas
+// Função para criar um cliente Supabase com a chave de serviço (seguro no servidor)
 const createServiceRoleClient = () => {
   const cookieStore = cookies();
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!, // Use a chave de serviço aqui
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
     {
       cookies: {
-        getAll() {
-          return cookieStore.getAll();
+        get(name: string) {
+          return cookieStore.get(name)?.value;
         },
-        setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
-          // Ações que modificam cookies devem ser tratadas com cuidado
-          // Para esta operação de leitura, podemos deixar em branco ou apenas registrar
+        set(name: string, value: string, options: CookieOptions) {
+          // Apenas para leitura, não precisamos implementar 'set' aqui
+        },
+        remove(name: string, options: CookieOptions) {
+          // Apenas para leitura, não precisamos implementar 'remove' aqui
         },
       },
     }
   );
 };
-
 
 export async function verifyOtpAction(
   prevState: VerifyOtpState,
@@ -42,14 +42,19 @@ export async function verifyOtpAction(
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return cookieStore.getAll();
+        get(name: string) {
+          return cookieStore.get(name)?.value;
         },
-        setAll(cookiesToSet) {
+        set(name: string, value: string, options: CookieOptions) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options);
-            });
+            cookieStore.set({ name, value, ...options });
+          } catch (error) {
+            // Ignorar erros em Server Actions
+          }
+        },
+        remove(name: string, options: CookieOptions) {
+          try {
+            cookieStore.set({ name, value: '', ...options });
           } catch (error) {
             // Ignorar erros em Server Actions
           }
@@ -64,12 +69,10 @@ export async function verifyOtpAction(
   if (!phone) {
     return { message: "Número de telefone não fornecido." };
   }
-
   if (!otp || otp.length !== 6) {
     return { message: "Código OTP inválido.", phone: phone };
   }
 
-  // A verificação do OTP continua usando o cliente normal (contexto do usuário)
   const { data: { session }, error: verifyError } = await supabase.auth.verifyOtp({
     phone: phone,
     token: otp,
@@ -78,29 +81,13 @@ export async function verifyOtpAction(
 
   if (verifyError) {
     console.error("Erro ao verificar OTP:", verifyError);
-    if (
-      verifyError.message.toLowerCase().includes("invalid") ||
-      verifyError.message.toLowerCase().includes("expired")
-    ) {
-      return {
-        message: "Código inválido ou expirado. Tente novamente.",
-        phone: phone,
-      };
-    }
-    return {
-      message: "Falha ao verificar o código. Tente novamente.",
-      phone: phone,
-    };
+    return { message: "Código inválido ou expirado. Tente novamente.", phone: phone };
   }
-
   if (!session?.user) {
-    console.error("Usuário não encontrado após verificação de OTP bem-sucedida.");
     return { message: "Erro ao obter informações do usuário.", phone: phone };
   }
-  
-  const user = session.user;
 
-  // AGORA, USAMOS O CLIENTE DE SERVIÇO PARA BYPASSAR A RLS NESTA CONSULTA
+  const user = session.user;
   const supabaseService = createServiceRoleClient();
   const { data: existingUser, error: userError } = await supabaseService
     .from("usuarios")
@@ -114,13 +101,11 @@ export async function verifyOtpAction(
   }
 
   if (existingUser) {
-    console.log(`[Verify OTP Action] Usuário ${user.id} encontrado. Redirecionando...`);
     if (existingUser.role === 'admin') {
       redirect("/admin/dashboard");
     }
     redirect("/dashboard");
   } else {
-    console.log(`[Verify OTP Action] Usuário ${user.id} NÃO encontrado. Redirecionando para /completar-cadastro.`);
     redirect(`/completar-cadastro?phone=${encodeURIComponent(phone)}`);
   }
 }
