@@ -91,16 +91,29 @@ export async function verifyOtpAction(
       return { message: "Código OTP inválido.", phone: phone };
     }
 
-    // Verificação OTP
-    const { data, error: verifyError } = await supabase.auth.verifyOtp({
+    // --- INÍCIO DA SOLUÇÃO ---
+    // Tenta verificar com 'sms' (login) e, se falhar, tenta com 'signup' (novo usuário).
+    let { data, error: verifyError } = await supabase.auth.verifyOtp({
       phone: phone,
       token: otp,
       type: "sms",
     });
 
     if (verifyError) {
-      console.error("Erro ao verificar OTP:", verifyError.message);
-      if (verifyError.message.includes("Invalid OTP") || verifyError.message.includes("invalid")) {
+      console.warn("Falha ao verificar OTP com tipo 'sms', tentando com 'signup'...");
+      const signupAttempt = await supabase.auth.verifyOtp({
+        phone: phone,
+        token: otp,
+        type: "signup",
+      });
+      data = signupAttempt.data;
+      verifyError = signupAttempt.error;
+    }
+    // --- FIM DA SOLUÇÃO ---
+
+    if (verifyError) {
+      console.error("Erro final ao verificar OTP:", verifyError.message);
+      if (verifyError.message.includes("Invalid OTP") || verifyError.message.includes("invalid") || verifyError.message.includes("not found")) {
         return { message: "O código inserido está incorreto. Tente novamente.", phone: phone };
       }
       if (verifyError.message.includes("expired")) {
@@ -109,7 +122,6 @@ export async function verifyOtpAction(
       return { message: "Código inválido ou expirado. Tente novamente.", phone: phone };
     }
 
-    // Verificação da sessão
     if (!data.session || !data.user) {
       return { message: "Não foi possível autenticar a sessão. Tente fazer login novamente.", phone: phone };
     }
@@ -128,7 +140,6 @@ export async function verifyOtpAction(
       return { message: "Erro ao verificar o cadastro. Contate o suporte.", phone: phone };
     }
 
-    // Redirecionamento baseado no usuário
     if (existingUser) {
       if (existingUser.role === 'admin') {
         redirect("/admin/dashboard");
