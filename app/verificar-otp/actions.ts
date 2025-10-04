@@ -46,10 +46,13 @@ export async function verifyOtpAction(
     return { message: "Código OTP inválido.", phone: phone };
   }
 
-  const { data: { session }, error: verifyError } = await supabase.auth.verifyOtp({
+  const {
+    data: { session },
+    error: verifyError,
+  } = await supabase.auth.verifyOtp({
     phone: phone,
     token: otp,
-    type: "whatsapp", // A verificação via WhatsApp continua aqui
+    type: "sms",
   });
 
   if (verifyError) {

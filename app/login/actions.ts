@@ -1,8 +1,63 @@
 "use server";
 
+import { createClient } from "@/utils/supabase/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+
+interface LoginWithWhatsAppState {
+  message: string;
+}
+
+const formatBrazilPhoneNumber = (value: string): string | null => {
+  const digitsOnly = value.replace(/\D/g, "");
+
+  if (digitsOnly.length === 10 || digitsOnly.length === 11) {
+    return `+55${digitsOnly}`;
+  }
+
+  return null;
+};
+
+export async function loginWithWhatsApp(
+  _prevState: LoginWithWhatsAppState,
+  formData: FormData
+): Promise<LoginWithWhatsAppState> {
+  const supabase = await createClient();
+
+  const rawWhatsapp = (formData.get("whatsapp") as string) ?? "";
+  const formattedPhone = formatBrazilPhoneNumber(rawWhatsapp);
+
+  if (!formattedPhone) {
+    return { message: "Número de WhatsApp inválido. Use DDD + número." };
+  }
+
+  const {
+    error: signInError,
+  } = await supabase.auth.signInWithOtp({
+    phone: formattedPhone,
+    options: {
+      channel: "whatsapp",
+      shouldCreateUser: true,
+    },
+  });
+
+  if (signInError) {
+    console.error("Erro ao enviar OTP via WhatsApp:", signInError);
+
+    const message =
+      signInError.message ===
+      "For security reasons, you can only request this code a few more times"
+        ? "Muitas tentativas. Aguarde antes de solicitar um novo código."
+        : "Não foi possível enviar o código. Tente novamente.";
+
+    return { message };
+  }
+
+  redirect(
+    `/verificar-otp?phone=${encodeURIComponent(formattedPhone)}&source=login`
+  );
+}
 
 // Definição do estado que a action pode retornar
 interface VerifyOtpState {
@@ -65,10 +120,13 @@ export async function verifyOtpAction(
     return { message: "Código OTP inválido.", phone: phone };
   }
 
-  const { data: { session }, error: verifyError } = await supabase.auth.verifyOtp({
+  const {
+    data: { session },
+    error: verifyError,
+  } = await supabase.auth.verifyOtp({
     phone: phone,
     token: otp,
-    type: "whatsapp",
+    type: "sms",
   });
 
   if (verifyError) {
