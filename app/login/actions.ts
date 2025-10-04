@@ -9,11 +9,24 @@ interface LoginWithWhatsAppState {
   message: string;
 }
 
+const BRAZIL_COUNTRY_CODE = "55";
+
 const formatBrazilPhoneNumber = (value: string): string | null => {
   const digitsOnly = value.replace(/\D/g, "");
 
   if (digitsOnly.length === 10 || digitsOnly.length === 11) {
-    return `+55${digitsOnly}`;
+    return `+${BRAZIL_COUNTRY_CODE}${digitsOnly}`;
+  }
+
+  if (
+    digitsOnly.startsWith(BRAZIL_COUNTRY_CODE) &&
+    (digitsOnly.length === 12 || digitsOnly.length === 13)
+  ) {
+    const withoutCountry = digitsOnly.slice(BRAZIL_COUNTRY_CODE.length);
+
+    if (withoutCountry.length === 10 || withoutCountry.length === 11) {
+      return `+${BRAZIL_COUNTRY_CODE}${withoutCountry}`;
+    }
   }
 
   return null;
@@ -66,8 +79,8 @@ interface VerifyOtpState {
 }
 
 // Função para criar um cliente Supabase com a chave de serviço
-const createServiceRoleClient = () => {
-  const cookieStore = cookies();
+const createServiceRoleClient = async () => {
+  const cookieStore = await cookies();
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -76,8 +89,16 @@ const createServiceRoleClient = () => {
         get(name: string) {
           return cookieStore.get(name)?.value;
         },
-        set(name: string, value: string, options: CookieOptions) {},
-        remove(name: string, options: CookieOptions) {},
+        set(name: string, value: string, options: CookieOptions) {
+          try {
+            cookieStore.set(name, value, options);
+          } catch (error) {}
+        },
+        remove(name: string, options: CookieOptions) {
+          try {
+            cookieStore.delete(name);
+          } catch (error) {}
+        },
       },
     }
   );
@@ -87,7 +108,7 @@ export async function verifyOtpAction(
   prevState: VerifyOtpState,
   formData: FormData
 ): Promise<VerifyOtpState> {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -98,12 +119,12 @@ export async function verifyOtpAction(
         },
         set(name: string, value: string, options: CookieOptions) {
           try {
-            cookieStore.set({ name, value, ...options });
+            cookieStore.set(name, value, options);
           } catch (error) {}
         },
         remove(name: string, options: CookieOptions) {
           try {
-            cookieStore.set({ name, value: '', ...options });
+            cookieStore.delete(name);
           } catch (error) {}
         },
       },
@@ -138,7 +159,7 @@ export async function verifyOtpAction(
   }
 
   const user = session.user;
-  const supabaseService = createServiceRoleClient();
+  const supabaseService = await createServiceRoleClient();
   const { data: existingUser, error: userError } = await supabaseService
     .from("usuarios")
     .select("id, role")
