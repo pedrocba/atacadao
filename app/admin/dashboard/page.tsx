@@ -1,9 +1,18 @@
 import { Separator } from "@/components/ui/separator";
 import { createClient } from "@/utils/supabase/server";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Users, Ticket, FileText } from "lucide-react"; // Ícones
 import DashboardGraficoFilial from "./DashboardGraficoFilial";
+import DailyNotesCouponsChart from "./DailyNotesCouponsChart";
+import { eachDayOfInterval, format, subDays } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 export default async function AdminDashboardPage() {
   const supabase = await createClient();
@@ -101,12 +110,78 @@ export default async function AdminDashboardPage() {
     }));
   }
 
+  const startDate = subDays(new Date(), 29);
+  const startDateISO = startDate.toISOString();
+
+  const [
+    { data: notasDiariasRaw, error: errorNotasDiarias },
+    { data: cuponsDiariosRaw, error: errorCuponsDiarias },
+  ] = await Promise.all([
+    supabase
+      .from("notas_fiscais")
+      .select("created_at, utilizada_para_cupom")
+      .gte("created_at", startDateISO),
+    supabase
+      .from("cupons")
+      .select("created_at")
+      .gte("created_at", startDateISO),
+  ]);
+
+  const notasDiarias = (notasDiariasRaw ?? []) as {
+    created_at: string | null;
+    utilizada_para_cupom: boolean | null;
+  }[];
+  const cuponsDiarios = (cuponsDiariosRaw ?? []) as {
+    created_at: string | null;
+  }[];
+
+  const notasPorDia = new Map<string, number>();
+  const notasConvertidasPorDia = new Map<string, number>();
+  const cuponsPorDia = new Map<string, number>();
+
+  notasDiarias.forEach((nota) => {
+    if (!nota.created_at) return;
+    const key = format(new Date(nota.created_at), "yyyy-MM-dd");
+    notasPorDia.set(key, (notasPorDia.get(key) || 0) + 1);
+    if (nota.utilizada_para_cupom) {
+      notasConvertidasPorDia.set(
+        key,
+        (notasConvertidasPorDia.get(key) || 0) + 1
+      );
+    }
+  });
+
+  cuponsDiarios.forEach((cupom) => {
+    if (!cupom.created_at) return;
+    const key = format(new Date(cupom.created_at), "yyyy-MM-dd");
+    cuponsPorDia.set(key, (cuponsPorDia.get(key) || 0) + 1);
+  });
+
+  const intervaloDias = eachDayOfInterval({ start: startDate, end: new Date() });
+  const dailySeries = intervaloDias.map((dia) => {
+    const key = format(dia, "yyyy-MM-dd");
+    const notas = notasPorDia.get(key) || 0;
+    const notasConvertidas = notasConvertidasPorDia.get(key) || 0;
+    const cupons = cuponsPorDia.get(key) || notasConvertidas;
+    const conversionRate = notas > 0 ? (cupons / notas) * 100 : 0;
+    return {
+      dateISO: key,
+      dateLabel: format(dia, "dd/MM", { locale: ptBR }),
+      notas,
+      cupons,
+      notasConvertidas,
+      conversionRate,
+    };
+  });
+
   const errors = [
     errorUsuarios,
     errorNotas,
     errorCupons,
     errorNotasPorFilial,
     errorCuponsPorFilial,
+    errorNotasDiarias,
+    errorCuponsDiarias,
   ].filter(Boolean);
 
   return (
@@ -189,6 +264,25 @@ export default async function AdminDashboardPage() {
         {/* Cards removidos: Clientes PJ, Cupons Elegíveis, Sorteios Realizados */}
       </div>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Evolução diária de notas e cupons</CardTitle>
+          <CardDescription>
+            Comparativo dos últimos 30 dias entre notas emitidas e cupons
+            gerados. Use este panorama para acompanhar o ritmo da campanha.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {dailySeries.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Não há dados registrados no período analisado.
+            </p>
+          ) : (
+            <DailyNotesCouponsChart data={dailySeries} />
+          )}
+        </CardContent>
+      </Card>
+
       {/* Gráfico de barras por filial */}
       {errorNotasPorFilial ? (
         <Alert variant="destructive">
@@ -198,6 +292,36 @@ export default async function AdminDashboardPage() {
       ) : (
         <DashboardGraficoFilial data={notasPorFilial || []} />
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Próximos gráficos recomendados</CardTitle>
+          <CardDescription>
+            Ideias para expandir os insights da dashboard conforme novos dados
+            forem coletados.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ul className="list-disc space-y-2 pl-5 text-sm text-muted-foreground">
+            <li>
+              Conversão por canal de envio (SMS x WhatsApp) para entender onde
+              os participantes têm mais aderência.
+            </li>
+            <li>
+              Funil por filial, comparando notas recebidas, validadas e cupons
+              sorteados para priorizar treinamentos.
+            </li>
+            <li>
+              Horário do dia com maior volume de submissões para alinhar
+              campanhas de mídia e suporte.
+            </li>
+            <li>
+              Distribuição de participantes por faixa de valor da nota fiscal,
+              identificando oportunidades de ticket médio.
+            </li>
+          </ul>
+        </CardContent>
+      </Card>
     </div>
   );
 }
