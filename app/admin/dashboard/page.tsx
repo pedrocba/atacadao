@@ -190,6 +190,7 @@ export default async function AdminDashboardPage() {
 
   const startDate = subDays(new Date(), 29);
   const startDateISO = startDate.toISOString();
+  const startDateDateOnly = format(startDate, "yyyy-MM-dd");
 
   const [
     { data: notasDiariasRaw, error: errorNotasDiarias },
@@ -197,8 +198,8 @@ export default async function AdminDashboardPage() {
   ] = await Promise.all([
     supabase
       .from("notas_fiscais")
-      .select("created_at, utilizada_para_cupom")
-      .gte("created_at", startDateISO),
+      .select("data_emissao, utilizada_para_cupom")
+      .gte("data_emissao", startDateDateOnly),
     supabase
       .from("cupons")
       .select("created_at")
@@ -206,7 +207,7 @@ export default async function AdminDashboardPage() {
   ]);
 
   const notasDiarias = (notasDiariasRaw ?? []) as {
-    created_at: string | null;
+    data_emissao: string | null;
     utilizada_para_cupom: boolean | null;
   }[];
   const cuponsDiarios = (cuponsDiariosRaw ?? []) as {
@@ -218,8 +219,8 @@ export default async function AdminDashboardPage() {
   const cuponsPorDia = new Map<string, number>();
 
   notasDiarias.forEach((nota) => {
-    if (!nota.created_at) return;
-    const key = format(new Date(nota.created_at), "yyyy-MM-dd");
+    if (!nota.data_emissao) return;
+    const key = format(new Date(nota.data_emissao), "yyyy-MM-dd");
     notasPorDia.set(key, (notasPorDia.get(key) || 0) + 1);
     if (nota.utilizada_para_cupom) {
       notasConvertidasPorDia.set(
@@ -240,15 +241,13 @@ export default async function AdminDashboardPage() {
     const key = format(dia, "yyyy-MM-dd");
     const notas = notasPorDia.get(key) || 0;
     const notasConvertidas = notasConvertidasPorDia.get(key) || 0;
-    const cupons = cuponsPorDia.get(key) || notasConvertidas;
-    const conversionRate = notas > 0 ? (cupons / notas) * 100 : 0;
+    const cupons = cuponsPorDia.get(key) || 0;
     return {
       dateISO: key,
       dateLabel: format(dia, "dd/MM", { locale: ptBR }),
       notas,
-      cupons,
       notasConvertidas,
-      conversionRate,
+      cupons,
     };
   });
 
