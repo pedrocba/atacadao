@@ -11,8 +11,74 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Users, Ticket, FileText } from "lucide-react"; // Ícones
 import DashboardGraficoFilial from "./DashboardGraficoFilial";
 import DailyNotesCouponsChart from "./DailyNotesCouponsChart";
+import ClientSharePieChart from "./ClientSharePieChart";
 import { eachDayOfInterval, format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
+
+interface ClientAggregationRow {
+  cnpj: string | null;
+  clientes?: {
+    nome_fantasia?: string | null;
+    razao_social?: string | null;
+  } | null;
+}
+
+interface NotaClienteRow extends ClientAggregationRow {
+  utilizada_para_cupom: boolean | null;
+}
+
+interface UsuarioClienteRow extends ClientAggregationRow {
+  role: string | null;
+}
+
+type ClientPieDatum = {
+  cnpj: string;
+  label: string;
+  value: number;
+};
+
+function formatCnpj(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length !== 14) {
+    return value;
+  }
+  return digits.replace(
+    /(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,
+    "$1.$2.$3/$4-$5"
+  );
+}
+
+function getClientLabel(record: ClientAggregationRow, fallbackCnpj: string) {
+  return (
+    record.clientes?.nome_fantasia ||
+    record.clientes?.razao_social ||
+    formatCnpj(fallbackCnpj)
+  );
+}
+
+function buildClientPieData(rows: ClientPieDatum[], topN = 5): ClientPieDatum[] {
+  const sorted = rows
+    .filter((row) => row.value > 0)
+    .sort((a, b) => b.value - a.value);
+
+  if (sorted.length <= topN) {
+    return sorted;
+  }
+
+  const top = sorted.slice(0, topN);
+  const others = sorted.slice(topN);
+  const othersTotal = others.reduce((acc, row) => acc + row.value, 0);
+
+  if (othersTotal > 0) {
+    top.push({
+      cnpj: "others",
+      label: `Outros (${others.length})`,
+      value: othersTotal,
+    });
+  }
+
+  return top;
+}
 
 export default async function AdminDashboardPage() {
   const supabase = await createClient();
@@ -22,10 +88,22 @@ export default async function AdminDashboardPage() {
     { count: totalUsuarios, error: errorUsuarios },
     { count: totalNotas, error: errorNotas },
     { count: totalCupons, error: errorCupons },
+    { data: notasClientesRaw, error: errorNotasClientes },
+    { data: cuponsClientesRaw, error: errorCuponsClientes },
+    { data: usuariosClientesRaw, error: errorUsuariosClientes },
   ] = await Promise.all([
     supabase.from("usuarios").select("*", { count: "exact", head: true }),
     supabase.from("notas_fiscais").select("*", { count: "exact", head: true }),
     supabase.from("cupons").select("*", { count: "exact", head: true }),
+    supabase
+      .from("notas_fiscais")
+      .select("cnpj, utilizada_para_cupom, clientes ( nome_fantasia, razao_social )"),
+    supabase
+      .from("cupons")
+      .select("cnpj, clientes ( nome_fantasia, razao_social )"),
+    supabase
+      .from("usuarios")
+      .select("cnpj, role, clientes ( nome_fantasia, razao_social )"),
     // Removidas buscas por clientes, elegiveis, sorteios
   ]);
 
@@ -174,6 +252,95 @@ export default async function AdminDashboardPage() {
     };
   });
 
+  const notasClientes = (notasClientesRaw ?? []) as NotaClienteRow[];
+  const cuponsClientes = (cuponsClientesRaw ?? []) as ClientAggregationRow[];
+  const usuariosClientes = (usuariosClientesRaw ?? []) as UsuarioClienteRow[];
+
+  const notasPorClienteMap = new Map<
+    string,
+    { label: string; totalNotas: number; totalNotasCupom: number }
+  >();
+
+  notasClientes.forEach((item) => {
+    if (!item.cnpj) return;
+    const label = getClientLabel(item, item.cnpj);
+    const current =
+      notasPorClienteMap.get(item.cnpj) ||
+      ({
+        label,
+        totalNotas: 0,
+        totalNotasCupom: 0,
+      } as const);
+
+    const totalNotas = current.totalNotas + 1;
+    const totalNotasCupom = item.utilizada_para_cupom
+      ? current.totalNotasCupom + 1
+      : current.totalNotasCupom;
+
+    notasPorClienteMap.set(item.cnpj, {
+      label,
+      totalNotas,
+      totalNotasCupom,
+    });
+  });
+
+  const cuponsPorClienteMap = new Map<string, { label: string; total: number }>();
+  cuponsClientes.forEach((item) => {
+    if (!item.cnpj) return;
+    const label = getClientLabel(item, item.cnpj);
+    const current = cuponsPorClienteMap.get(item.cnpj) || {
+      label,
+      total: 0,
+    };
+    cuponsPorClienteMap.set(item.cnpj, {
+      label,
+      total: current.total + 1,
+    });
+  });
+
+  const usuariosPorClienteMap = new Map<
+    string,
+    { label: string; total: number }
+  >();
+
+  usuariosClientes.forEach((usuario) => {
+    if (!usuario.cnpj) return;
+    if (usuario.role && usuario.role !== "cliente") return;
+    const label = getClientLabel(usuario, usuario.cnpj);
+    const current = usuariosPorClienteMap.get(usuario.cnpj) || {
+      label,
+      total: 0,
+    };
+    usuariosPorClienteMap.set(usuario.cnpj, {
+      label,
+      total: current.total + 1,
+    });
+  });
+
+  const notasPorClienteData = buildClientPieData(
+    Array.from(notasPorClienteMap.entries()).map(([cnpj, stats]) => ({
+      cnpj,
+      label: stats.label,
+      value: stats.totalNotas,
+    }))
+  );
+
+  const cuponsPorClienteData = buildClientPieData(
+    Array.from(cuponsPorClienteMap.entries()).map(([cnpj, stats]) => ({
+      cnpj,
+      label: stats.label,
+      value: stats.total,
+    }))
+  );
+
+  const usuariosPorClienteData = buildClientPieData(
+    Array.from(usuariosPorClienteMap.entries()).map(([cnpj, stats]) => ({
+      cnpj,
+      label: stats.label,
+      value: stats.total,
+    }))
+  );
+
   const errors = [
     errorUsuarios,
     errorNotas,
@@ -182,6 +349,9 @@ export default async function AdminDashboardPage() {
     errorCuponsPorFilial,
     errorNotasDiarias,
     errorCuponsDiarias,
+    errorNotasClientes,
+    errorCuponsClientes,
+    errorUsuariosClientes,
   ].filter(Boolean);
 
   return (
@@ -292,6 +462,53 @@ export default async function AdminDashboardPage() {
       ) : (
         <DashboardGraficoFilial data={notasPorFilial || []} />
       )}
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle>Notas cadastradas por cliente</CardTitle>
+            <CardDescription>
+              Distribuição dos cadastros de notas por empresa participante.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ClientSharePieChart
+              data={notasPorClienteData}
+              emptyMessage="Ainda não existem notas cadastradas."
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Cupons gerados por cliente</CardTitle>
+            <CardDescription>
+              Participação dos cupons emitidos a partir das notas validadas.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ClientSharePieChart
+              data={cuponsPorClienteData}
+              emptyMessage="Ainda não existem cupons emitidos."
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Usuários por cliente</CardTitle>
+            <CardDescription>
+              Empresas com mais representantes cadastrados na campanha.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ClientSharePieChart
+              data={usuariosPorClienteData}
+              emptyMessage="Nenhum usuário cliente cadastrado até o momento."
+            />
+          </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader>
