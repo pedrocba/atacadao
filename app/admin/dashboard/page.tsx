@@ -12,6 +12,7 @@ import { Users, Ticket, FileText } from "lucide-react"; // Ícones
 import DashboardGraficoFilial from "./DashboardGraficoFilial";
 import DailyNotesCouponsChart from "./DailyNotesCouponsChart";
 import ClientSharePieChart from "./ClientSharePieChart";
+import CuponsPorDiaChart from "./CuponsPorDiaChart";
 import { eachDayOfInterval, format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -36,6 +37,11 @@ type ClientPieDatum = {
   label: string;
   value: number;
 };
+
+type CuponsPorDiaData = {
+  dia: string;
+  quantidade: number;
+}[];
 
 function formatCnpj(value: string): string {
   const digits = value.replace(/\D/g, "");
@@ -214,9 +220,24 @@ export default async function AdminDashboardPage() {
     created_at: string | null;
   }[];
 
+  let cuponsPorDia: CuponsPorDiaData = [];
+  let errorCuponsPorDia: any = null;
+  try {
+    const { data, error } = await supabase.rpc("get_cupons_por_dia");
+
+    if (error) throw error;
+    cuponsPorDia = (data as any[] | null | undefined)?.map((item) => ({
+      dia: String(item.dia),
+      quantidade: Number(item.quantidade),
+    })) || [];
+  } catch (err) {
+    console.error("Erro ao buscar cupons por dia:", err);
+    errorCuponsPorDia = err;
+  }
+
   const notasPorDia = new Map<string, number>();
   const notasConvertidasPorDia = new Map<string, number>();
-  const cuponsPorDia = new Map<string, number>();
+  const cuponsPorDiaMap = new Map<string, number>();
 
   notasDiarias.forEach((nota) => {
     if (!nota.data_emissao) return;
@@ -233,7 +254,7 @@ export default async function AdminDashboardPage() {
   cuponsDiarios.forEach((cupom) => {
     if (!cupom.created_at) return;
     const key = format(new Date(cupom.created_at), "yyyy-MM-dd");
-    cuponsPorDia.set(key, (cuponsPorDia.get(key) || 0) + 1);
+    cuponsPorDiaMap.set(key, (cuponsPorDiaMap.get(key) || 0) + 1);
   });
 
   const intervaloDias = eachDayOfInterval({ start: startDate, end: new Date() });
@@ -241,7 +262,7 @@ export default async function AdminDashboardPage() {
     const key = format(dia, "yyyy-MM-dd");
     const notas = notasPorDia.get(key) || 0;
     const notasConvertidas = notasConvertidasPorDia.get(key) || 0;
-    const cupons = cuponsPorDia.get(key) || 0;
+    const cupons = cuponsPorDiaMap.get(key) || 0;
     return {
       dateISO: key,
       dateLabel: format(dia, "dd/MM", { locale: ptBR }),
@@ -351,6 +372,7 @@ export default async function AdminDashboardPage() {
     errorNotasClientes,
     errorCuponsClientes,
     errorUsuariosClientes,
+    errorCuponsPorDia,
   ].filter(Boolean);
 
   return (
@@ -432,6 +454,17 @@ export default async function AdminDashboardPage() {
 
         {/* Cards removidos: Clientes PJ, Cupons Elegíveis, Sorteios Realizados */}
       </div>
+
+      {errorCuponsPorDia ? (
+        <Alert variant="destructive">
+          <AlertTitle>Erro ao carregar gráfico de Cupons por Dia</AlertTitle>
+          <AlertDescription>
+            {errorCuponsPorDia?.message || "Não foi possível carregar os dados."}
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <CuponsPorDiaChart data={cuponsPorDia} />
+      )}
 
       <Card>
         <CardHeader>
