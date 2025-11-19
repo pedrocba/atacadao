@@ -92,15 +92,23 @@ export default async function AdminDashboardPage() {
   // Buscar contagens essenciais em paralelo
   const [
     { count: totalUsuarios, error: errorUsuarios },
-    { count: totalNotas, error: errorNotas },
     { count: totalCupons, error: errorCupons },
+    { count: notasComCupom, error: errorNotasComCupom },
+    { count: notasSemCupom, error: errorNotasSemCupom },
     { data: notasClientesRaw, error: errorNotasClientes },
     { data: cuponsClientesRaw, error: errorCuponsClientes },
     { data: usuariosClientesRaw, error: errorUsuariosClientes },
   ] = await Promise.all([
     supabase.from("usuarios").select("*", { count: "exact", head: true }),
-    supabase.from("notas_fiscais").select("*", { count: "exact", head: true }),
     supabase.from("cupons").select("*", { count: "exact", head: true }),
+    supabase
+      .from("notas_fiscais")
+      .select("*", { count: "exact", head: true })
+      .eq("utilizada_para_cupom", true),
+    supabase
+      .from("notas_fiscais")
+      .select("*", { count: "exact", head: true })
+      .eq("utilizada_para_cupom", false),
     supabase
       .from("notas_fiscais")
       .select("cnpj, utilizada_para_cupom, clientes ( nome_fantasia, razao_social )"),
@@ -363,8 +371,9 @@ export default async function AdminDashboardPage() {
 
   const errors = [
     errorUsuarios,
-    errorNotas,
     errorCupons,
+    errorNotasComCupom,
+    errorNotasSemCupom,
     errorNotasPorFilial,
     errorCuponsPorFilial,
     errorNotasDiarias,
@@ -396,8 +405,8 @@ export default async function AdminDashboardPage() {
         </Alert>
       )}
 
-      {/* Grid ajustado para 3 colunas em telas médias */}
-      <div className="grid gap-4 md:grid-cols-3">
+      {/* Grid ajustado para 4 colunas em telas médias */}
+      <div className="grid gap-4 md:grid-cols-4">
         {/* Card Usuários */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -416,23 +425,47 @@ export default async function AdminDashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Card Notas Fiscais */}
-        <Card>
+        {/* --- INICIO DA SUBSTITUIÇÃO --- */}
+
+        {/* CARD 1: Notas Aptas (Válidas) */}
+        <Card className="shadow-sm border-l-4 border-l-green-500">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total de Notas Fiscais
-            </CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Notas Aptas</CardTitle>
+            <FileText className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {errorNotas ? "-" : (totalNotas ?? 0)}
+              {errorNotasComCupom
+                ? "Erro"
+                : notasComCupom?.toLocaleString("pt-BR") ?? 0}
             </div>
             <p className="text-xs text-muted-foreground">
-              Total de NFs recebidas
+              Geraram cupons com sucesso
             </p>
           </CardContent>
         </Card>
+
+        {/* CARD 2: Notas Sem Cupom (Ação Necessária) */}
+        <Card className="shadow-sm border-l-4 border-l-amber-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Notas Pendentes</CardTitle>
+            <FileText className="h-4 w-4 text-amber-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {errorNotasSemCupom
+                ? "Erro"
+                : notasSemCupom?.toLocaleString("pt-BR") ?? 0}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Não geraram cupons ainda
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* --- FIM DA SUBSTITUIÇÃO --- */}
+
+        {/* ... Card de Cupons abaixo ... */}
 
         {/* Card Cupons */}
         <Card>
