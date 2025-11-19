@@ -95,6 +95,11 @@ export default async function AdminDashboardPage() {
     { count: totalCupons, error: errorCupons },
     { count: notasComCupom, error: errorNotasComCupom },
     { count: notasSemCupom, error: errorNotasSemCupom },
+    {
+      data: notasAptasRaw,
+      count: totalNotasAptas,
+      error: errorNotasAptas,
+    },
     { data: notasClientesRaw, error: errorNotasClientes },
     { data: cuponsClientesRaw, error: errorCuponsClientes },
     { data: usuariosClientesRaw, error: errorUsuariosClientes },
@@ -109,6 +114,10 @@ export default async function AdminDashboardPage() {
       .from("notas_fiscais")
       .select("*", { count: "exact", head: true })
       .eq("utilizada_para_cupom", false),
+    supabase
+      .from("notas_fiscais")
+      .select("valida, qtd_fornecedores, valor", { count: "exact" })
+      .gte("valor", 500),
     supabase
       .from("notas_fiscais")
       .select("cnpj, utilizada_para_cupom, clientes ( nome_fantasia, razao_social )"),
@@ -284,6 +293,27 @@ export default async function AdminDashboardPage() {
   const cuponsClientes = (cuponsClientesRaw ?? []) as ClientAggregationRow[];
   const usuariosClientes = (usuariosClientesRaw ?? []) as UsuarioClienteRow[];
 
+  const notasAptas = (notasAptasRaw ?? []) as {
+    valida: boolean | null;
+    qtd_fornecedores: number | null;
+    valor: number | null;
+  }[];
+
+  const totalNotasAptasValidas = notasAptas.reduce(
+    (acc, nota) => (nota.valida ? acc + 1 : acc),
+    0
+  );
+
+  const fornecedoresNasNotasAptas = notasAptas.reduce(
+    (acc, nota) => acc + Number(nota.qtd_fornecedores || 0),
+    0
+  );
+
+  const mediaFornecedoresPorNotaApta =
+    totalNotasAptas && totalNotasAptas > 0
+      ? fornecedoresNasNotasAptas / totalNotasAptas
+      : 0;
+
   const notasPorClienteMap = new Map<
     string,
     { label: string; totalNotas: number; totalNotasCupom: number }
@@ -374,6 +404,7 @@ export default async function AdminDashboardPage() {
     errorCupons,
     errorNotasComCupom,
     errorNotasSemCupom,
+    errorNotasAptas,
     errorNotasPorFilial,
     errorCuponsPorFilial,
     errorNotasDiarias,
@@ -487,6 +518,70 @@ export default async function AdminDashboardPage() {
 
         {/* Cards removidos: Clientes PJ, Cupons Elegíveis, Sorteios Realizados */}
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Notas aptas (≥ R$ 500) e fornecedores</CardTitle>
+          <CardDescription>
+            Cruzamento de valor mínimo, validação e fornecedores informados
+            para acompanhar o potencial real de cupons.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {errorNotasAptas ? (
+            <Alert variant="destructive">
+              <AlertTitle>Erro ao carregar notas aptas</AlertTitle>
+              <AlertDescription>
+                {errorNotasAptas?.message || "Não foi possível obter os dados."}
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">Notas aptas</p>
+                <p className="text-2xl font-semibold">
+                  {(totalNotasAptas ?? 0).toLocaleString("pt-BR")}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Valor igual ou superior a R$ 500,00
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">Notas aptas e válidas</p>
+                <p className="text-2xl font-semibold">
+                  {totalNotasAptasValidas.toLocaleString("pt-BR")}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Dentro dos critérios e já validadas
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">Fornecedores envolvidos</p>
+                <p className="text-2xl font-semibold">
+                  {fornecedoresNasNotasAptas.toLocaleString("pt-BR")}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Soma de fornecedores declarados nas notas aptas
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">
+                  Fornecedores por nota apta (média)
+                </p>
+                <p className="text-2xl font-semibold">
+                  {mediaFornecedoresPorNotaApta.toLocaleString("pt-BR", {
+                    minimumFractionDigits: 1,
+                    maximumFractionDigits: 1,
+                  })}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Reflete a profundidade de relacionamento por compra
+                </p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {errorCuponsPorDia ? (
         <Alert variant="destructive">
