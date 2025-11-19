@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns"; // Para formatar datas
 import { ptBR } from "date-fns/locale"; // Para formato brasileiro
 import Image from "next/image"; // Importar Image
+import { EligibleNotes } from "@/components/EligibleNotes";
 
 // Importar Logo
 import logoAtacadao from "@/img/logo_atacadao.png";
@@ -108,6 +109,19 @@ export default async function DashboardPage() {
     // Tratar o erro, talvez mostrar mensagem na seção de cupons
   }
 
+  // 5. Buscar notas fiscais aptas para submissão
+  const { data: notasAptas, error: notasAptasError } = await supabase
+    .from("notas_fiscais")
+    .select("num_nota, data_emissao, valor") // Selecionar campos desejados
+    .eq("cnpj", userCnpj) // Filtrar pelo CNPJ do usuário
+    .eq("valida", true) // Apenas notas que são válidas
+    .eq("utilizada_para_cupom", false); // Apenas notas que ainda não geraram cupom
+
+  if (notasAptasError) {
+    console.error("Erro ao buscar notas fiscais aptas:", notasAptasError);
+    // Tratar o erro, se necessário
+  }
+
   // --- RENDERIZAÇÃO DO DASHBOARD NORMAL ---
   return (
     <div className="container mx-auto py-8 px-4 md:px-6 max-w-screen-sm">
@@ -140,6 +154,11 @@ export default async function DashboardPage() {
           <SubmeterForm />
         </CardContent>
       </Card>
+
+      <Separator className="my-8" />
+
+      {/* Seção Intermediária: Notas Fiscais Aptas */}
+      {notasAptas && <EligibleNotes notes={notasAptas} />}
 
       <Separator className="my-8" />
 
