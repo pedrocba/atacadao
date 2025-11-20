@@ -11,8 +11,8 @@ interface VerifyOtpState {
 }
 
 // Função para criar um cliente Supabase com a chave de serviço
-const createServiceRoleClient = () => {
-  const cookieStore = cookies();
+const createServiceRoleClient = async () => {
+  const cookieStore = await cookies();
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -32,7 +32,7 @@ export async function verifyOtpAction(
   prevState: VerifyOtpState,
   formData: FormData
 ): Promise<VerifyOtpState> {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
