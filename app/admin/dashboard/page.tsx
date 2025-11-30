@@ -95,6 +95,8 @@ export default async function AdminDashboardPage() {
     { count: totalCupons, error: errorCupons },
     { count: notasComCupom, error: errorNotasComCupom },
     { count: notasSemCupom, error: errorNotasSemCupom },
+    { count: notasValidadas, error: errorNotasValidadas },
+    { count: notasNaoValidadas, error: errorNotasNaoValidadas },
     {
       data: notasAptasRaw,
       count: totalNotasAptas,
@@ -114,6 +116,14 @@ export default async function AdminDashboardPage() {
       .from("notas_fiscais")
       .select("*", { count: "exact", head: true })
       .eq("utilizada_para_cupom", false),
+    supabase
+      .from("notas_fiscais")
+      .select("*", { count: "exact", head: true })
+      .eq("valida", true),
+    supabase
+      .from("notas_fiscais")
+      .select("*", { count: "exact", head: true })
+      .or("valida.eq.false,valida.is.null"),
     supabase
       .from("notas_fiscais")
       .select("valida, qtd_fornecedores, valor", { count: "exact" })
@@ -405,6 +415,8 @@ export default async function AdminDashboardPage() {
     errorNotasComCupom,
     errorNotasSemCupom,
     errorNotasAptas,
+    errorNotasValidadas,
+    errorNotasNaoValidadas,
     errorNotasPorFilial,
     errorCuponsPorFilial,
     errorNotasDiarias,
@@ -453,8 +465,8 @@ export default async function AdminDashboardPage() {
             <p className="text-xs text-muted-foreground">
               Usuários cadastrados na plataforma
             </p>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
         {/* --- INICIO DA SUBSTITUIÇÃO --- */}
 
@@ -495,6 +507,42 @@ export default async function AdminDashboardPage() {
         </Card>
 
         {/* --- FIM DA SUBSTITUIÇÃO --- */}
+
+        {/* CARD: Notas validadas pelo cliente */}
+        <Card className="shadow-sm border-l-4 border-l-sky-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Notas validadas</CardTitle>
+            <FileText className="h-4 w-4 text-sky-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {errorNotasValidadas
+                ? "Erro"
+                : notasValidadas?.toLocaleString("pt-BR") ?? 0}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Confirmadas pelos clientes como válidas
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* CARD: Notas pendentes de validação */}
+        <Card className="shadow-sm border-l-4 border-l-rose-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Notas a verificar</CardTitle>
+            <FileText className="h-4 w-4 text-rose-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {errorNotasNaoValidadas
+                ? "Erro"
+                : notasNaoValidadas?.toLocaleString("pt-BR") ?? 0}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Aguardam validação do cliente
+            </p>
+          </CardContent>
+        </Card>
 
         {/* ... Card de Cupons abaixo ... */}
 
