@@ -13,6 +13,7 @@ import DashboardGraficoFilial from "./DashboardGraficoFilial";
 import DailyNotesCouponsChart from "./DailyNotesCouponsChart";
 import ClientSharePieChart from "./ClientSharePieChart";
 import CuponsPorDiaChart from "./CuponsPorDiaChart";
+import NotasAptasPorFilialChart from "./NotasAptasPorFilialChart";
 import { eachDayOfInterval, format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -41,6 +42,12 @@ type ClientPieDatum = {
 type CuponsPorDiaData = {
   dia: string;
   quantidade: number;
+}[];
+
+type NotasAptasPorFilial = {
+  cod_filial: number;
+  aptas: number;
+  aptasValidas: number;
 }[];
 
 function formatCnpj(value: string): string {
@@ -105,6 +112,7 @@ export default async function AdminDashboardPage() {
     { data: notasClientesRaw, error: errorNotasClientes },
     { data: cuponsClientesRaw, error: errorCuponsClientes },
     { data: usuariosClientesRaw, error: errorUsuariosClientes },
+    { data: notasAptasFilialRaw, error: errorNotasAptasPorFilial },
   ] = await Promise.all([
     supabase.from("usuarios").select("*", { count: "exact", head: true }),
     supabase.from("cupons").select("*", { count: "exact", head: true }),
@@ -137,6 +145,10 @@ export default async function AdminDashboardPage() {
     supabase
       .from("usuarios")
       .select("cnpj, role, clientes ( nome_fantasia, razao_social )"),
+    supabase
+      .from("notas_fiscais")
+      .select("cod_filial, valida, valor")
+      .gte("valor", 500),
     // Removidas buscas por clientes, elegiveis, sorteios
   ]);
 
@@ -309,6 +321,34 @@ export default async function AdminDashboardPage() {
     valor: number | null;
   }[];
 
+  const notasAptasPorFilial: NotasAptasPorFilial = (notasAptasFilialRaw ?? [])
+    .filter((nota) => !!nota.cod_filial)
+    .reduce(
+      (
+        acc: Map<number, { aptas: number; aptasValidas: number }>,
+        curr: { cod_filial: number; valida: boolean | null }
+      ) => {
+        const filial = curr.cod_filial;
+        const atual = acc.get(filial) || { aptas: 0, aptasValidas: 0 };
+        acc.set(filial, {
+          aptas: atual.aptas + 1,
+          aptasValidas: curr.valida
+            ? atual.aptasValidas + 1
+            : atual.aptasValidas,
+        });
+        return acc;
+      },
+      new Map()
+    );
+
+  const notasAptasPorFilialData: NotasAptasPorFilial = Array.from(
+    notasAptasPorFilial.entries()
+  ).map(([cod_filial, valores]) => ({
+    cod_filial,
+    aptas: valores.aptas,
+    aptasValidas: valores.aptasValidas,
+  }));
+
   const totalNotasAptasValidas = notasAptas.reduce(
     (acc, nota) => (nota.valida ? acc + 1 : acc),
     0
@@ -425,6 +465,7 @@ export default async function AdminDashboardPage() {
     errorCuponsClientes,
     errorUsuariosClientes,
     errorCuponsPorDia,
+    errorNotasAptasPorFilial,
   ].filter(Boolean);
 
   return (
@@ -627,6 +668,32 @@ export default async function AdminDashboardPage() {
                 </p>
               </div>
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Notas aptas por filial</CardTitle>
+          <CardDescription>
+            Volume de notas acima de R$ 500 por filial e quantas já foram validadas.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {errorNotasAptasPorFilial ? (
+            <Alert variant="destructive">
+              <AlertTitle>Erro ao carregar notas aptas por filial</AlertTitle>
+              <AlertDescription>
+                {errorNotasAptasPorFilial?.message ||
+                  "Não foi possível obter os dados."}
+              </AlertDescription>
+            </Alert>
+          ) : notasAptasPorFilialData.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Nenhuma nota apta registrada com código de filial.
+            </p>
+          ) : (
+            <NotasAptasPorFilialChart data={notasAptasPorFilialData} />
           )}
         </CardContent>
       </Card>
