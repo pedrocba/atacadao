@@ -134,7 +134,9 @@ export default async function AdminDashboardPage() {
       .or("valida.eq.false,valida.is.null"),
     supabase
       .from("notas_fiscais")
-      .select("valida, qtd_fornecedores, valor", { count: "exact" })
+      .select("valida, utilizada_para_cupom, qtd_fornecedores, valor", {
+        count: "exact",
+      })
       .gte("valor", 500),
     supabase
       .from("notas_fiscais")
@@ -147,7 +149,7 @@ export default async function AdminDashboardPage() {
       .select("cnpj, role, clientes ( nome_fantasia, razao_social )"),
     supabase
       .from("notas_fiscais")
-      .select("cod_filial, valida, valor")
+      .select("cod_filial, valida, utilizada_para_cupom, valor")
       .gte("valor", 500),
     // Removidas buscas por clientes, elegiveis, sorteios
   ]);
@@ -317,6 +319,7 @@ export default async function AdminDashboardPage() {
 
   const notasAptas = (notasAptasRaw ?? []) as {
     valida: boolean | null;
+    utilizada_para_cupom: boolean | null;
     qtd_fornecedores: number | null;
     valor: number | null;
   }[];
@@ -326,13 +329,17 @@ export default async function AdminDashboardPage() {
     .reduce(
       (
         acc: Map<number, { aptas: number; aptasValidas: number }>,
-        curr: { cod_filial: number; valida: boolean | null }
+        curr: {
+          cod_filial: number;
+          valida: boolean | null;
+          utilizada_para_cupom: boolean | null;
+        }
       ) => {
         const filial = curr.cod_filial;
         const atual = acc.get(filial) || { aptas: 0, aptasValidas: 0 };
         acc.set(filial, {
           aptas: atual.aptas + 1,
-          aptasValidas: curr.valida
+          aptasValidas: curr.utilizada_para_cupom
             ? atual.aptasValidas + 1
             : atual.aptasValidas,
         });
@@ -350,7 +357,7 @@ export default async function AdminDashboardPage() {
   }));
 
   const totalNotasAptasValidas = notasAptas.reduce(
-    (acc, nota) => (nota.valida ? acc + 1 : acc),
+    (acc, nota) => (nota.utilizada_para_cupom ? acc + 1 : acc),
     0
   );
 
