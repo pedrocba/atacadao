@@ -321,7 +321,7 @@ export default async function AdminDashboardPage() {
     valor: number | null;
   }[];
 
-  const notasAptasPorFilial: NotasAptasPorFilial = (notasAptasFilialRaw ?? [])
+  const notasAptasPorFilialMap = (notasAptasFilialRaw ?? [])
     .filter((nota) => !!nota.cod_filial)
     .reduce(
       (
@@ -338,11 +338,11 @@ export default async function AdminDashboardPage() {
         });
         return acc;
       },
-      new Map()
+      new Map<number, { aptas: number; aptasValidas: number }>()
     );
 
   const notasAptasPorFilialData: NotasAptasPorFilial = Array.from(
-    notasAptasPorFilial.entries()
+    notasAptasPorFilialMap.entries()
   ).map(([cod_filial, valores]) => ({
     cod_filial,
     aptas: valores.aptas,
