@@ -360,6 +360,11 @@ export default async function AdminDashboardPage() {
     (acc, nota) => (nota.utilizada_para_cupom ? acc + 1 : acc),
     0
   );
+  const totalNotasAptasBase = totalNotasAptas ?? 0;
+  const totalNotasAptasPendentes = Math.max(
+    totalNotasAptasBase - totalNotasAptasValidas,
+    0
+  );
 
   const fornecedoresNasNotasAptas = notasAptas.reduce(
     (acc, nota) => acc + Number(nota.qtd_fornecedores || 0),
@@ -526,12 +531,12 @@ export default async function AdminDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {errorNotasComCupom
+              {errorNotasAptas
                 ? "Erro"
-                : notasComCupom?.toLocaleString("pt-BR") ?? 0}
+                : totalNotasAptasValidas.toLocaleString("pt-BR")}
             </div>
             <p className="text-xs text-muted-foreground">
-              Geraram cupons com sucesso
+              Válidas e com valor acima de R$ 500,00
             </p>
           </CardContent>
         </Card>
@@ -544,12 +549,12 @@ export default async function AdminDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {errorNotasSemCupom
+              {errorNotasAptas
                 ? "Erro"
-                : notasSemCupom?.toLocaleString("pt-BR") ?? 0}
+                : totalNotasAptasPendentes.toLocaleString("pt-BR")}
             </div>
             <p className="text-xs text-muted-foreground">
-              Não geraram cupons ainda
+              Acima de R$ 500,00, mas sem validação
             </p>
           </CardContent>
         </Card>
