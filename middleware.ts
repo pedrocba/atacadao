@@ -1,6 +1,6 @@
+import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/utils/supabase/middleware";
-import { createClient } from "@/utils/supabase/server"; // Precisamos para verificar o usuário pós-updateSession
 
 export async function middleware(request: NextRequest) {
   // 1. Atualiza a sessão e obtém a resposta inicial
@@ -8,7 +8,22 @@ export async function middleware(request: NextRequest) {
 
   // 2. Cria um cliente Supabase (usando cookies potencialmente atualizados pela response)
   //    para verificar o estado de autenticação atual.
-  const supabase = await createClient(); // Usa a versão server que lê cookies
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options),
+          );
+        },
+      },
+    },
+  );
   const {
     data: { user },
   } = await supabase.auth.getUser();
