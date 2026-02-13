@@ -213,37 +213,77 @@ export function RaffleScreen({ totalCuponsElegiveis }: RaffleScreenProps) {
             {/* Winner Reveal Modal / Section */}
             {status === 'finished' && winner && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-300">
-                    <div className="bg-white rounded-3xl p-8 max-w-2xl w-full shadow-2xl text-center space-y-8 animate-in zoom-in-50 duration-500 slide-in-from-bottom-10">
-                        <Award className="w-24 h-24 text-yellow-500 mx-auto animate-bounce" />
-                        <div>
-                            <h2 className="text-5xl font-black text-[#1e3a8a] mb-2">TEMOS UM GANHADOR!</h2>
-                            <p className="text-xl text-gray-500">Parabéns ao novo proprietário do Fiat Mobi 0km</p>
-                        </div>
+                    <div className="bg-white rounded-3xl overflow-hidden max-w-4xl w-full shadow-2xl animate-in zoom-in-50 duration-500 slide-in-from-bottom-10 flex flex-col md:flex-row">
 
-                        <div className="bg-gray-50 p-8 rounded-2xl border-2 border-dashed border-gray-200">
-                            <div className="grid grid-cols-2 gap-4 text-left">
-                                <div>
-                                    <p className="text-xs text-gray-400 uppercase font-bold">Nome do Cliente</p>
-                                    <p className="text-2xl font-bold text-gray-800">{winner.nome_cliente || "Cliente Anônimo"}</p>
-                                </div>
-                                <div>
-                                    <p className="text-xs text-gray-400 uppercase font-bold">Número da Nota</p>
-                                    <p className="text-2xl font-bold text-gray-800">{winner.num_nota}</p>
-                                </div>
-                                <div className="col-span-2">
-                                    <p className="text-xs text-gray-400 uppercase font-bold">ID do Cupom</p>
-                                    <p className="text-xl font-mono text-gray-600">#{winner.id}</p>
-                                </div>
+                        {/* Left Side - Car Image */}
+                        <div className="md:w-1/2 bg-gray-50 flex items-center justify-center p-8 relative">
+                            {/* Background Decoration */}
+                            <div className="absolute inset-0 bg-gradient-to-tr from-gray-100 to-transparent opacity-50"></div>
+                            <div className="relative z-10 w-full aspect-square flex items-center justify-center">
+                                <Image
+                                    src="/img/fiat-mobi.png"
+                                    alt="Prize Car"
+                                    width={400}
+                                    height={400}
+                                    className="object-contain drop-shadow-xl"
+                                />
                             </div>
                         </div>
 
-                        <Button
-                            size="lg"
-                            className="w-full bg-[#1e3a8a] hover:bg-blue-900 text-white font-bold"
-                            onClick={() => setStatus('idle')}
-                        >
-                            REALIZAR NOVO SORTEIO
-                        </Button>
+                        {/* Right Side - Winner Details */}
+                        <div className="md:w-1/2 p-8 md:p-12 flex flex-col justify-center text-left">
+                            <div className="mb-6">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <Award className="w-5 h-5 text-red-500" />
+                                    <span className="text-xs font-bold text-red-500 tracking-widest uppercase">
+                                        GRAND PRIZE WINNER
+                                    </span>
+                                </div>
+                                <h2 className="text-5xl font-black text-[#1e3a8a] leading-none mb-2 tracking-tight">
+                                    {winner.nome_cliente || "Cliente Anônimo"}
+                                </h2>
+                                <p className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
+                                    WINNING COUPON: <span className="text-red-500">#{winner.id}</span>
+                                </p>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4 mb-8">
+                                <div className="bg-gray-50 p-4 rounded-xl flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center text-red-500">
+                                        <span className="font-bold text-lg">$</span>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase">PRIZE VALUE</p>
+                                        <p className="font-bold text-[#1e3a8a]">R$ 70.000,00</p>
+                                    </div>
+                                </div>
+                                <div className="bg-gray-50 p-4 rounded-xl flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center text-red-500">
+                                        <Award className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase">STATUS</p>
+                                        <p className="font-bold text-[#1e3a8a]">Verified Hash</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-4">
+                                <Button
+                                    className="flex-1 bg-[#1e3a8a] hover:bg-blue-900 text-white font-bold h-12 rounded-lg text-lg shadow-lg shadow-blue-900/20"
+                                    onClick={() => setStatus('idle')}
+                                >
+                                    Claim My Prize
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    className="flex-none gap-2 font-bold h-12 rounded-lg border-2 border-gray-100 hover:border-gray-200 text-[#1e3a8a]"
+                                >
+                                    Share Result
+                                </Button>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
             )}

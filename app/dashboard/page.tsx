@@ -65,47 +65,34 @@ export default async function DashboardPage() {
   // 2. Tentar buscar o registro do usuário na tabela 'usuarios'
   const { data: usuarioCompleto, error: usuarioCompletoError } = await supabase
     .from("usuarios")
-    .select("cnpj, role, nome") // Selecionar os campos necessários
+    .select("cnpj, role, nome")
     .eq("id", user.id)
-    .single<UsuarioCompleto>(); // Usar single para esperar 0 ou 1 resultado
+    .single();
 
-  // Se NÃO ENCONTROU usuário completo ou houve erro, ALGO ESTÁ ERRADO
-  // O usuário não deveria ter chegado aqui sem registro em 'usuarios'
   if (usuarioCompletoError || !usuarioCompleto) {
-    console.error(
-      "ERRO INESPERADO: Usuário autenticado no dashboard SEM registro na tabela 'usuarios'",
-      {
-        userId: user.id,
-        error: usuarioCompletoError,
-      }
-    );
-    // Redirecionar para login pode ser uma opção segura
-    // Ou talvez para uma página de erro específica?
-    // Ou tentar um logout?
+    console.error("Dashboard: Erro ao buscar perfil do usuário.", usuarioCompletoError);
+    // Logout seguro se o perfil não existir (consistência de dados)
     await supabase.auth.signOut();
     redirect("/login");
   }
 
-  // --- SE CHEGOU AQUI, O CADASTRO ESTÁ COMPLETO ---
-
-  const nomeUsuario = usuarioCompleto.nome || "Usuário";
-  const userCnpj = usuarioCompleto.cnpj;
-
-  // Se for admin, redirecionar para o dashboard de admin (segurança extra)
+  // Se for admin, redirecionar
   if (usuarioCompleto.role === "admin") {
     redirect("/admin/dashboard");
   }
 
-  // 4. Buscar cupons do cliente (usando o CNPJ obtido)
+  const { nome: nomeUsuario, cnpj: userCnpj } = usuarioCompleto;
+
+  // 3. Buscar cupons do cliente (usando o CNPJ obtido)
+  // Otimização: Limitar colunas e usar talvez paginação no futuro se necessário
   const { data: cupons, error: cuponsError } = await supabase
     .from("cupons")
-    .select("id, num_nota, created_at, sorteado_em") // Selecionar campos relevantes
+    .select("id, num_nota, created_at, sorteado_em")
     .eq("cnpj", userCnpj)
-    .order("created_at", { ascending: false }); // Ordenar por data de criação descendente
+    .order("created_at", { ascending: false });
 
   if (cuponsError) {
-    console.error("Erro ao buscar cupons:", cuponsError);
-    // Tratar o erro, talvez mostrar mensagem na seção de cupons
+    console.error("Dashboard: Erro ao buscar cupons.", cuponsError);
   }
 
   // --- RENDERIZAÇÃO DO DASHBOARD NORMAL ---
