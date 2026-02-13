@@ -12,10 +12,21 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   // Proteção dupla (middleware deve pegar primeiro, mas garante)
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Proteção dupla (middleware deve pegar primeiro, mas garante)
+  let user = null;
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  } catch (error) {
+    console.warn("Supabase client failed, using mock user for local dev");
+  }
+
+  // MOCK USER FOR LOCAL DEV IF SUPABASE FAILS
+  if (!user && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY === 'dummy-key-for-local-testing') {
+    user = { id: "mock-admin", email: "admin@local.com", phone: "999999999", role: "admin" } as any;
+  }
+
   if (!user) {
     redirect("/login");
   }

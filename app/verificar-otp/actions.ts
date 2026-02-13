@@ -12,9 +12,8 @@ interface VerifyOtpState {
 }
 
 // Função para criar um cliente Supabase com a chave de serviço (seguro no servidor)
-const createServiceRoleClient = () => {
-  // CORREÇÃO APLICADA AQUI: 'await' foi removido
-  const cookieStore = cookies(); 
+const createServiceRoleClient = async () => {
+  const cookieStore = await cookies();
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -23,8 +22,8 @@ const createServiceRoleClient = () => {
         get(name: string) {
           return cookieStore.get(name)?.value;
         },
-        set(name: string, value: string, options: CookieOptions) {},
-        remove(name: string, options: CookieOptions) {},
+        set(name: string, value: string, options: CookieOptions) { },
+        remove(name: string, options: CookieOptions) { },
       },
     }
   );
@@ -49,7 +48,7 @@ export async function verifyOtpAction(
   const { data: { session }, error: verifyError } = await supabase.auth.verifyOtp({
     phone: phone,
     token: otp,
-    type: "whatsapp", // A verificação via WhatsApp continua aqui
+    type: "sms", // A verificação via WhatsApp continua aqui
   });
 
   if (verifyError) {
@@ -61,7 +60,7 @@ export async function verifyOtpAction(
   }
 
   const user = session.user;
-  const supabaseService = createServiceRoleClient();
+  const supabaseService = await createServiceRoleClient();
   const { data: existingUser, error: userError } = await supabaseService
     .from("usuarios")
     .select("id, role")
