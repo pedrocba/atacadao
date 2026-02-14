@@ -163,37 +163,9 @@ export function RaffleScreen({ totalCuponsElegiveis }: RaffleScreenProps) {
             </Card>
 
             {/* Control Bar */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                {/* Participants - Mocked */}
-                <Card className="bg-[#1e3a8a] text-white border-none shadow-lg rounded-2xl">
-                    <CardContent className="p-6 flex items-center justify-between">
-                        <div>
-                            <p className="text-xs opacity-70 font-semibold uppercase tracking-wider mb-1">Clientes Participantes</p>
-                            <p className="text-4xl font-black">20.000</p>
-                        </div>
-                        <div className="w-12 h-12 bg-white/10 rounded-lg flex items-center justify-center">
-                            <Users className="w-6 h-6 text-white" />
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* Coupons */}
-                <Card className="bg-white border-none shadow-lg rounded-2xl">
-                    <CardContent className="p-6 flex items-center justify-between">
-                        <div>
-                            <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider mb-1">Cupons Gerados</p>
-                            <p className="text-4xl font-black text-[#1e3a8a]">
-                                {totalCuponsElegiveis ? totalCuponsElegiveis.toLocaleString('pt-BR') : "142.859"}
-                            </p>
-                        </div>
-                        <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                            <Ticket className="w-6 h-6 text-gray-500" />
-                        </div>
-                    </CardContent>
-                </Card>
-
+            <div className="flex justify-center mb-8">
                 {/* Action Button */}
-                <Card className="border-none shadow-lg rounded-2xl flex items-center justify-center p-2 bg-white">
+                <Card className="border-none shadow-lg rounded-2xl flex items-center justify-center p-2 bg-white w-full max-w-sm">
                     <Button
                         size="lg"
                         className={cn(
