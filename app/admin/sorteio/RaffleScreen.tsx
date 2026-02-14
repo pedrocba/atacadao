@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Award, Users, Ticket, MapPin, Play, Loader2 } from "lucide-react";
 import { realizarSorteioAction } from "./actions"; // Assuming this exists or will be adapted
 import { cn } from "@/lib/utils";
+import fiatMobiImg from "@/img/fiat-mobi.png";
 
 // Mock Data for Units
 const UNITS = [
@@ -142,7 +143,7 @@ export function RaffleScreen({ totalCuponsElegiveis }: RaffleScreenProps) {
                         <div className="relative z-10 w-full max-w-lg aspect-video rounded-2xl overflow-hidden shadow-2xl bg-gray-100 flex items-center justify-center">
                             {/* Use the downloaded image if available, else fallback */}
                             <Image
-                                src="/img/fiat-mobi.png"
+                                src={fiatMobiImg}
                                 alt="Fiat Mobi 0km"
                                 fill
                                 className="object-cover"
@@ -193,7 +194,7 @@ export function RaffleScreen({ totalCuponsElegiveis }: RaffleScreenProps) {
                             <div className="absolute inset-0 bg-gradient-to-tr from-gray-100 to-transparent opacity-50"></div>
                             <div className="relative z-10 w-full aspect-square flex items-center justify-center">
                                 <Image
-                                    src="/img/fiat-mobi.png"
+                                    src={fiatMobiImg}
                                     alt="Prize Car"
                                     width={400}
                                     height={400}
