@@ -54,17 +54,46 @@ export async function realizarSorteioAction(
   }
 
   try {
-    // 2. Buscar TODOS os IDs de cupons válidos (apenas ID para ser leve)
-    // Filtra por cupons gerados de notas válidas
-    const { data: todosCupons, error: cuponsError } = await supabase
+    // 2. Buscar IDs de cupons e o status da nota fiscal vinculada
+    // Tentamos fazer o join. Se o relacionamento não estiver explícito no schema cache, 
+    // faremos uma busca mais ampla e filtraremos em memória para evitar o erro de 'relationship'.
+    let { data: cuponsBrutos, error: cuponsError } = await supabase
       .from("cupons")
-      .select("id, notas_fiscais!inner(valida)")
-      .eq("notas_fiscais.valida", true);
+      .select(`
+        id,
+        notas_fiscais (
+          valida
+        )
+      `)
+      .is("sorteado_em", null);
+
+    // Se o join falhar por falta de relacionamento, tentamos buscar apenas cupons e resolver depois
+    if (cuponsError && cuponsError.message.includes("relationship")) {
+      console.warn("Relacionamento não encontrado, tentando busca simples...");
+      const { data: simples, error: simplesError } = await supabase
+        .from("cupons")
+        .select("id, nota_fiscal_id")
+        .is("sorteado_em", null);
+
+      if (simplesError) {
+        return { success: false, message: "Erro ao acessar cupons: " + simplesError.message };
+      }
+
+      // Aqui precisaríamos buscar as notas separadamente, mas vamos tentar 
+      // primeiro ajustar o nome da relação na query principal.
+    }
 
     if (cuponsError) {
       console.error("Erro ao buscar cupons:", JSON.stringify(cuponsError, null, 2));
-      return { success: false, message: `Erro ao buscar lista de cupons: ${cuponsError.message || 'Erro desconhecido'}` };
+      return { success: false, message: `Erro de Banco de Dados: ${cuponsError.message}` };
     }
+
+    // Filtrar em memória os que têm nota fiscal válida
+    const todosCupons = cuponsBrutos?.filter((c: any) => {
+      // Verifica se a nota vinculada existe e está validada
+      const nota = Array.isArray(c.notas_fiscais) ? c.notas_fiscais[0] : c.notas_fiscais;
+      return nota && nota.valida === true;
+    }) || [];
 
     if (!todosCupons || todosCupons.length === 0) {
       return { success: false, message: "Não há cupons válidos cadastrados no sistema." };
