@@ -117,7 +117,7 @@ export function RaffleScreen({ totalCuponsElegiveis }: RaffleScreenProps) {
                         <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#1e3a8a] via-purple-600 to-red-600 tracking-tight uppercase">
                             Grande Sorteio Anual
                         </h1>
-                        <p className="text-sm text-gray-500 font-medium">Campanha Meio a Meio 2024</p>
+                        <p className="text-sm text-gray-500 font-medium">Campanha Meio a Meio 2026</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
@@ -225,7 +225,7 @@ export function RaffleScreen({ totalCuponsElegiveis }: RaffleScreenProps) {
 
                             {/* Overlay Badge */}
                             <div className="absolute bottom-6 left-6 bg-gradient-to-r from-[#ef4444] to-red-600 text-white px-6 py-3 font-black text-lg rounded-xl shadow-2xl">
-                                FIAT MOBI 2024
+                                FIAT MOBI 2026
                             </div>
 
                             {/* Shine Effect */}
@@ -364,28 +364,38 @@ export function RaffleScreen({ totalCuponsElegiveis }: RaffleScreenProps) {
                                 </div>
 
                                 {/* Prize Details Grid */}
-                                <div className="grid grid-cols-2 gap-4 mb-10">
-                                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-5 rounded-2xl shadow-sm border border-green-100">
-                                        <div className="flex items-center gap-3 mb-2">
-                                            <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center shadow-lg text-white">
+                                <div className="grid grid-cols-2 gap-4 mb-4">
+                                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-4 rounded-2xl shadow-sm border border-green-100">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center shadow-lg text-white shrink-0">
                                                 <span className="font-black text-lg">$</span>
                                             </div>
                                             <div>
-                                                <p className="text-[10px] font-bold text-green-600 uppercase">Valor</p>
-                                                <p className="font-black text-xl text-green-900">R$ 70k</p>
+                                                <p className="text-[10px] font-bold text-green-600 uppercase leading-tight">Valor</p>
+                                                <p className="font-black text-lg text-green-900 leading-tight">R$ 79.990</p>
                                             </div>
                                         </div>
                                     </div>
 
-                                    <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-5 rounded-2xl shadow-sm border border-purple-100">
-                                        <div className="flex items-center gap-3 mb-2">
-                                            <div className="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center shadow-lg text-white">
+                                    <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-4 rounded-2xl shadow-sm border border-purple-100">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center shadow-lg text-white shrink-0">
                                                 <Award className="w-5 h-5" />
                                             </div>
                                             <div>
-                                                <p className="text-[10px] font-bold text-purple-600 uppercase">Status</p>
-                                                <p className="font-black text-xl text-purple-900">Validado</p>
+                                                <p className="text-[10px] font-bold text-purple-600 uppercase leading-tight">Status</p>
+                                                <p className="font-black text-lg text-purple-900 leading-tight">Validado</p>
                                             </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="col-span-2 bg-gradient-to-r from-red-500 to-red-600 p-4 rounded-2xl shadow-md text-white flex items-center justify-between">
+                                        <div>
+                                            <p className="text-[10px] font-bold uppercase opacity-80 leading-tight">Modelo Oficial</p>
+                                            <p className="font-black text-xl leading-tight">Fiat Mobi Like <span className="text-yellow-300">2026</span></p>
+                                        </div>
+                                        <div className="bg-white/20 px-3 py-1 rounded-lg backdrop-blur-sm">
+                                            <span className="font-black text-sm tracking-wider">0KM</span>
                                         </div>
                                     </div>
                                 </div>

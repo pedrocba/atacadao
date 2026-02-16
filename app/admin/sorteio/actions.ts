@@ -14,77 +14,132 @@ interface SorteioResult {
   }[];
 }
 
-// Função auxiliar para embaralhar um array (Fisher-Yates shuffle)
-function shuffleArray<T>(array: T[]): T[] {
-  let currentIndex = array.length,
-    randomIndex;
-  // Enquanto ainda houver elementos para embaralhar.
-  while (currentIndex !== 0) {
-    // Escolha um elemento restante.
-    randomIndex = Math.floor(Math.random() * currentIndex);
-    currentIndex--;
-    // E troque-o pelo elemento atual.
-    [array[currentIndex], array[randomIndex]] = [
-      array[randomIndex],
-      array[currentIndex],
-    ];
-  }
-  return array;
-}
-
 export async function getElegibleCuponsForAnimation(): Promise<{
   cupom_ids: number[];
 }> {
-  // MOCK DATA
-  await new Promise((resolve) => setTimeout(resolve, 500)); // Simulate delay
-  const mockIds = Array.from({ length: 200 }, (_, i) => i + 1);
-  return { cupom_ids: mockIds };
+  const supabase = await createClient();
+
+  // Busca até 200 IDs aleatórios de cupons não sorteados para a animação
+  // Útil para o efeito visual de "embaralhar"
+  const { data } = await supabase
+    .from("cupons")
+    .select("id")
+    .is("sorteado_em", null)
+    .limit(200);
+
+  const ids = data?.map(c => c.id) || [];
+  return { cupom_ids: ids };
 }
 
 /**
- * Realiza o sorteio de um número específico de cupons.
- * Lógica implementada diretamente em TypeScript.
+ * Realiza o sorteio de cupons utilizando a lógica real do sistema.
+ * Critérios:
+ * 1. O cupom não pode ter sido sorteado anteriormente (sorteado_em IS NULL).
+ * 2. A nota fiscal associada deve ser válida (notas_fiscais.valida = true).
+ * 
+ * O resultado é salvo na tabela 'sorteios' e o cupom é marcado com timestamp em 'sorteado_em'.
  */
-
 export async function realizarSorteioAction(
   quantidade: number
 ): Promise<SorteioResult> {
+  const supabase = await createClient();
+
+  // 1. Verificar autenticação do Admin
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) {
+    return { success: false, message: "Usuário não autenticado." };
+  }
+
   if (quantidade <= 0) {
     return { success: false, message: "A quantidade deve ser maior que zero." };
   }
 
-  // MOCK LOGIC - Simulate process
-  await new Promise((resolve) => setTimeout(resolve, 2000)); // Simulate work
+  const cuponsSorteados: NonNullable<SorteioResult['cuponsSorteados']> = [];
 
-  // Generate random winners
-  const cuponsSorteadosMock = [];
-  const nomesMockados = [
-    "SUPERMERCADO SILVA E CIA LTDA",
-    "MERCADINHO DO JOAO",
-    "PADARIA CENTRAL",
-    "FARMACIA SAO JOSE",
-    "ACOUGUE BOI NA BRASA",
-    "DISTRIBUIDORA ALIANCA",
-    "COMERCIAL SANTOS",
-    "LOJA DE CONVENIENCIA EXPRESS"
-  ];
+  try {
+    for (let i = 0; i < quantidade; i++) {
+      // 2. Contar número de cupons elegíveis
+      const { count, error: countError } = await supabase
+        .from("cupons")
+        .select("id, notas_fiscais!inner(valida)", { count: "exact", head: true })
+        .is("sorteado_em", null)
+        .eq("notas_fiscais.valida", true);
 
-  for (let i = 0; i < quantidade; i++) {
-    const id = Math.floor(Math.random() * 500) + 1;
-    cuponsSorteadosMock.push({
-      id: id,
-      num_nota: `NOTA-${id}-${Date.now()}`,
-      nome_cliente: nomesMockados[Math.floor(Math.random() * nomesMockados.length)],
-      razao_social: nomesMockados[Math.floor(Math.random() * nomesMockados.length)],
-    });
+      if (countError) {
+        console.error("Erro ao contar cupons:", countError);
+        return { success: false, message: "Erro ao acessar banco de dados: " + countError.message };
+      }
+
+      if (count === null || count === 0) {
+        return { success: false, message: "Não há cupons aptos para sorteio no momento." };
+      }
+
+      // 3. Selecionar um índice aleatório
+      const randomIndex = Math.floor(Math.random() * count);
+
+      // 4. Buscar o cupom nesse índice (aleatório)
+      const { data: cupom, error: fetchError } = await supabase
+        .from("cupons")
+        .select(`
+          id,
+          num_nota,
+          notas_fiscais!inner ( valida ),
+          clientes ( razao_social, nome_fantasia )
+        `)
+        .is("sorteado_em", null)
+        .eq("notas_fiscais.valida", true)
+        .range(randomIndex, randomIndex)
+        .maybeSingle();
+
+      if (fetchError) {
+        console.error("Erro ao buscar cupom sorteado:", fetchError);
+        return { success: false, message: "Erro ao selecionar o cupom vencedor." };
+      }
+
+      if (!cupom) {
+        return { success: false, message: "Erro de concorrência: cupom selecionado não disponível." };
+      }
+
+      // 5. Registrar o sorteio na tabela 'sorteios'
+      const { error: insertError } = await supabase
+        .from("sorteios")
+        .insert({
+          cupom_id: cupom.id,
+          admin_user_id: user.id
+        });
+
+      if (insertError) {
+        console.error("Erro ao inserir sorteio:", insertError);
+        return { success: false, message: "Erro ao registrar o vencedor no banco de dados." };
+      }
+
+      // 6. Atualizar o cupom como sorteado
+      await supabase
+        .from("cupons")
+        .update({ sorteado_em: new Date().toISOString() })
+        .eq("id", cupom.id);
+
+      // Tratamento dos dados do cliente
+      const clienteData = Array.isArray(cupom.clientes) ? cupom.clientes[0] : cupom.clientes;
+
+      cuponsSorteados.push({
+        id: cupom.id,
+        num_nota: cupom.num_nota,
+        razao_social: clienteData?.razao_social || "Razão Social não encontrada",
+        nome_cliente: clienteData?.nome_fantasia
+      });
+    }
+
+    revalidatePath("/admin/sorteio");
+
+    return {
+      success: true,
+      message: "Sorteio realizado com sucesso!",
+      cuponsSorteados
+    };
+
+  } catch (err: any) {
+    console.error("Erro inesperado no sorteio:", err);
+    return { success: false, message: "Ocorreu um erro interno: " + err.message };
   }
-
-  // No revalidation needed for mock state on server, but UI will update.
-  // revalidatePath("/admin/sorteio");
-
-  return {
-    success: true,
-    message: `${cuponsSorteadosMock.length} cupom(ns) sorteado(s) com sucesso! (MOCK)`,
-    cuponsSorteados: cuponsSorteadosMock,
-  };
 }
