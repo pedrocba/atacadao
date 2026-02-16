@@ -14,37 +14,36 @@ interface SorteioResult {
   }[];
 }
 
+// Fisher-Yates Shuffle Algorithm
+function shuffleArray<T>(array: T[]): T[] {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
 export async function getElegibleCuponsForAnimation(): Promise<{
   cupom_ids: number[];
 }> {
   const supabase = await createClient();
 
-  // Busca até 200 IDs aleatórios de cupons não sorteados para a animação
-  // Útil para o efeito visual de "embaralhar"
+  // Busca uma amostra de IDs para animação
   const { data } = await supabase
     .from("cupons")
     .select("id")
-    .is("sorteado_em", null)
-    .limit(200);
+    .limit(200); // Apenas para efeito visual
 
   const ids = data?.map(c => c.id) || [];
   return { cupom_ids: ids };
 }
 
-/**
- * Realiza o sorteio de cupons utilizando a lógica real do sistema.
- * Critérios:
- * 1. O cupom não pode ter sido sorteado anteriormente (sorteado_em IS NULL).
- * 2. A nota fiscal associada deve ser válida (notas_fiscais.valida = true).
- * 
- * O resultado é salvo na tabela 'sorteios' e o cupom é marcado com timestamp em 'sorteado_em'.
- */
 export async function realizarSorteioAction(
   quantidade: number
 ): Promise<SorteioResult> {
   const supabase = await createClient();
 
-  // 1. Verificar autenticação do Admin
+  // 1. Verificar autenticação
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) {
     return { success: false, message: "Usuário não autenticado." };
@@ -54,79 +53,102 @@ export async function realizarSorteioAction(
     return { success: false, message: "A quantidade deve ser maior que zero." };
   }
 
-  const cuponsSorteados: NonNullable<SorteioResult['cuponsSorteados']> = [];
-
   try {
-    for (let i = 0; i < quantidade; i++) {
-      // 2. Contar número de cupons elegíveis
-      const { count, error: countError } = await supabase
-        .from("cupons")
-        .select("id, notas_fiscais!inner(valida)", { count: "exact", head: true })
-        .is("sorteado_em", null)
-        .eq("notas_fiscais.valida", true);
+    // 2. Buscar TODOS os IDs de cupons válidos (apenas ID para ser leve)
+    // Filtra por cupons gerados de notas válidas
+    const { data: todosCupons, error: cuponsError } = await supabase
+      .from("cupons")
+      .select("id, notas_fiscais!inner(valida)")
+      .eq("notas_fiscais.valida", true);
 
-      if (countError) {
-        console.error("Erro ao contar cupons:", countError);
-        return { success: false, message: "Erro ao acessar banco de dados: " + countError.message };
-      }
+    if (cuponsError) {
+      console.error("Erro ao buscar cupons:", JSON.stringify(cuponsError, null, 2));
+      return { success: false, message: `Erro ao buscar lista de cupons: ${cuponsError.message || 'Erro desconhecido'}` };
+    }
 
-      if (count === null || count === 0) {
-        return { success: false, message: "Não há cupons aptos para sorteio no momento." };
-      }
+    if (!todosCupons || todosCupons.length === 0) {
+      return { success: false, message: "Não há cupons válidos cadastrados no sistema." };
+    }
 
-      // 3. Selecionar um índice aleatório
-      const randomIndex = Math.floor(Math.random() * count);
+    // 3. Buscar IDs já sorteados na tabela 'sorteios'
+    const { data: sorteados, error: sorteadosError } = await supabase
+      .from("sorteios")
+      .select("cupom_id");
 
-      // 4. Buscar o cupom nesse índice (aleatório)
-      const { data: cupom, error: fetchError } = await supabase
-        .from("cupons")
-        .select(`
-          id,
-          num_nota,
-          notas_fiscais!inner ( valida ),
-          clientes ( razao_social, nome_fantasia )
-        `)
-        .is("sorteado_em", null)
-        .eq("notas_fiscais.valida", true)
-        .range(randomIndex, randomIndex)
-        .maybeSingle();
+    if (sorteadosError) {
+      console.error("Erro ao buscar sorteados:", sorteadosError);
+      return { success: false, message: "Erro ao verificar histórico de sorteios." };
+    }
 
-      if (fetchError) {
-        console.error("Erro ao buscar cupom sorteado:", fetchError);
-        return { success: false, message: "Erro ao selecionar o cupom vencedor." };
-      }
+    const idsJaSorteados = new Set(sorteados?.map(s => s.cupom_id) || []);
 
-      if (!cupom) {
-        return { success: false, message: "Erro de concorrência: cupom selecionado não disponível." };
-      }
+    // 4. Filtrar Elegíveis (Exclui os já sorteados)
+    const idsElegiveis = todosCupons
+      .map(c => c.id)
+      .filter(id => !idsJaSorteados.has(id));
 
-      // 5. Registrar o sorteio na tabela 'sorteios'
+    if (idsElegiveis.length < quantidade) {
+      return {
+        success: false,
+        message: `Não há cupons suficientes para sortear. Disponíveis: ${idsElegiveis.length}, Solicitados: ${quantidade}`
+      };
+    }
+
+    // 5. Embaralhar (Fisher-Yates Shuffle)
+    const idsEmbaralhados = shuffleArray([...idsElegiveis]);
+
+    // 6. Selecionar os primeiros N vencedores
+    const idsVencedores = idsEmbaralhados.slice(0, quantidade);
+
+    // 7. Persistir e Buscar Detalhes
+    const cuponsSorteadosResult: NonNullable<SorteioResult['cuponsSorteados']> = [];
+
+    for (const cupomId of idsVencedores) {
+      // Inserir na tabela sorteios
       const { error: insertError } = await supabase
         .from("sorteios")
         .insert({
-          cupom_id: cupom.id,
+          cupom_id: cupomId,
           admin_user_id: user.id
         });
 
       if (insertError) {
-        console.error("Erro ao inserir sorteio:", insertError);
-        return { success: false, message: "Erro ao registrar o vencedor no banco de dados." };
+        // Se falhar (ex: race condition), loga e continua ou aborta?
+        // Vamos abortar este específico mas tentar retornar os que deram certo? 
+        // Ou abortar tudo. Aqui vamos logar e tentar continuar se possível, ou lançar erro.
+        console.error(`Erro ao salvar sorteio para cupom ${cupomId}:`, insertError);
+        throw new Error("Falha ao registrar ganhador no banco de dados.");
       }
 
-      // 6. Atualizar o cupom como sorteado
+      // Marcar timestamp no cupom (opcional, mas bom pra consistência visual)
       await supabase
         .from("cupons")
         .update({ sorteado_em: new Date().toISOString() })
-        .eq("id", cupom.id);
+        .eq("id", cupomId);
 
-      // Tratamento dos dados do cliente
-      const clienteData = Array.isArray(cupom.clientes) ? cupom.clientes[0] : cupom.clientes;
+      // Buscar detalhes completos do vencedor
+      const { data: cupomDetalhes, error: detailsError } = await supabase
+        .from("cupons")
+        .select(`
+          id,
+          num_nota,
+          clientes ( razao_social, nome_fantasia )
+        `)
+        .eq("id", cupomId)
+        .single();
 
-      cuponsSorteados.push({
-        id: cupom.id,
-        num_nota: cupom.num_nota,
-        razao_social: clienteData?.razao_social || "Razão Social não encontrada",
-        nome_cliente: clienteData?.nome_fantasia
+      if (detailsError || !cupomDetalhes) {
+        console.error(`Erro ao buscar detalhes do cupom ${cupomId}:`, detailsError);
+        continue;
+      }
+
+      const clienteData = Array.isArray(cupomDetalhes.clientes) ? cupomDetalhes.clientes[0] : cupomDetalhes.clientes;
+
+      cuponsSorteadosResult.push({
+        id: cupomDetalhes.id,
+        num_nota: cupomDetalhes.num_nota,
+        razao_social: clienteData?.razao_social || "Razão Social não disponível",
+        nome_cliente: clienteData?.nome_fantasia || null
       });
     }
 
@@ -134,12 +156,12 @@ export async function realizarSorteioAction(
 
     return {
       success: true,
-      message: "Sorteio realizado com sucesso!",
-      cuponsSorteados
+      message: `${cuponsSorteadosResult.length} cupom(ns) sorteado(s) com sucesso!`,
+      cuponsSorteados: cuponsSorteadosResult
     };
 
   } catch (err: any) {
-    console.error("Erro inesperado no sorteio:", err);
-    return { success: false, message: "Ocorreu um erro interno: " + err.message };
+    console.error("Erro crítico no processo de sorteio:", err);
+    return { success: false, message: "Erro interno no processo de sorteio: " + err.message };
   }
 }
