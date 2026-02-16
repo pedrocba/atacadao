@@ -135,7 +135,7 @@ export async function loginWithWhatsApp(
 
   const phone = formData.get("whatsapp") as string;
   // Simple validation: remove non-numeric chars
-  const cleanPhone = phone.replace(/\\D/g, "");
+  const cleanPhone = phone.replace(/\D/g, "");
 
   if (!cleanPhone) {
     return { message: "Número de telefone inválido." };
@@ -145,7 +145,9 @@ export async function loginWithWhatsApp(
   // Assuming BR (+55) if length is 10 or 11.
   let formattedPhone = cleanPhone;
   if (cleanPhone.length >= 10 && cleanPhone.length <= 11) {
-    formattedPhone = `55${cleanPhone}`;
+    formattedPhone = `+55${cleanPhone}`;
+  } else {
+    formattedPhone = `+${cleanPhone}`;
   }
 
   const { error } = await supabase.auth.signInWithOtp({
