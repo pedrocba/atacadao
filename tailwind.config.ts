@@ -85,10 +85,38 @@ const config = {
             height: "0",
           },
         },
+        confetti: {
+          "0%": {
+            transform: "translateY(-100vh) rotate(0deg)",
+            opacity: "1",
+          },
+          "100%": {
+            transform: "translateY(100vh) rotate(720deg)",
+            opacity: "0",
+          },
+        },
+        blob: {
+          "0%, 100%": {
+            transform: "translate(0, 0) scale(1)",
+          },
+          "33%": {
+            transform: "translate(30px, -50px) scale(1.1)",
+          },
+          "66%": {
+            transform: "translate(-20px, 20px) scale(0.9)",
+          },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        confetti: "confetti 3s linear forwards",
+        blob: "blob 7s infinite",
+      },
+      animationDelay: {
+        "1000": "1s",
+        "2000": "2s",
+        "4000": "4s",
       },
     },
   },
