@@ -10,6 +10,7 @@ interface SorteioResult {
     id: number;
     num_nota: string;
     nome_cliente?: string | null;
+    razao_social?: string | null;
   }[];
 }
 
@@ -57,12 +58,24 @@ export async function realizarSorteioAction(
 
   // Generate random winners
   const cuponsSorteadosMock = [];
+  const nomesMockados = [
+    "SUPERMERCADO SILVA E CIA LTDA",
+    "MERCADINHO DO JOAO",
+    "PADARIA CENTRAL",
+    "FARMACIA SAO JOSE",
+    "ACOUGUE BOI NA BRASA",
+    "DISTRIBUIDORA ALIANCA",
+    "COMERCIAL SANTOS",
+    "LOJA DE CONVENIENCIA EXPRESS"
+  ];
+
   for (let i = 0; i < quantidade; i++) {
     const id = Math.floor(Math.random() * 500) + 1;
     cuponsSorteadosMock.push({
       id: id,
       num_nota: `NOTA-${id}-${Date.now()}`,
-      nome_cliente: `Cliente Mockado ${id}`,
+      nome_cliente: nomesMockados[Math.floor(Math.random() * nomesMockados.length)],
+      razao_social: nomesMockados[Math.floor(Math.random() * nomesMockados.length)],
     });
   }
 

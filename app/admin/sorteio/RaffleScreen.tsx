@@ -12,14 +12,14 @@ import fiatMobiImg from "@/img/fiat-mobi.png";
 
 // Mock Data for Units
 const UNITS = [
-    { name: "Loja 1 Centro", id: 1 },
-    { name: "Loja 2 Norte", id: 2 },
-    { name: "Loja 3 Sul", id: 3 },
-    { name: "Loja 4 Leste", id: 4 },
-    { name: "Loja 5 Oeste", id: 5 },
-    { name: "Loja 6 Industrial", id: 6 },
-    { name: "Loja 7 Shopping", id: 7 },
-    { name: "Loja 8 Express", id: 8 },
+    { name: "Filial Santarém", id: 1 },
+    { name: "Filial Curuá", id: 2 },
+    { name: "Filial Alenquer", id: 3 },
+    { name: "Filial Óbidos", id: 4 },
+    { name: "Filial Almeirim", id: 5 },
+    { name: "Filial Santa Maria", id: 6 },
+    { name: "Filial Ciabeer", id: 7 },
+    { name: "Filial Uruará", id: 8 },
 ];
 
 // Confetti Component
@@ -201,11 +201,7 @@ export function RaffleScreen({ totalCuponsElegiveis }: RaffleScreenProps) {
                                         </span>
                                     )}
                                 </p>
-                                {totalCuponsElegiveis !== null && (
-                                    <p className="text-sm text-gray-500 mt-1">
-                                        {totalCuponsElegiveis.toLocaleString('pt-BR')} cupons elegíveis
-                                    </p>
-                                )}
+
                             </div>
                         </div>
                     </div>
@@ -350,7 +346,7 @@ export function RaffleScreen({ totalCuponsElegiveis }: RaffleScreenProps) {
 
                                     {/* Winner Name */}
                                     <h2 className="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#1e3a8a] via-purple-600 to-red-600 leading-[0.9] mb-4 tracking-tight animate-in slide-in-from-left duration-700 drop-shadow-sm break-words">
-                                        {winner.nome_cliente || "Cliente Anônimo"}
+                                        {winner.razao_social || winner.nome_cliente || "Cliente Anônimo"}
                                     </h2>
 
                                     {/* Coupon Info */}
@@ -423,7 +419,7 @@ export function RaffleScreen({ totalCuponsElegiveis }: RaffleScreenProps) {
             <div className="mt-12 bg-white/80 backdrop-blur-sm rounded-3xl p-8 shadow-xl relative z-10">
                 <h3 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#1e3a8a] to-purple-600 mb-6 flex items-center">
                     <MapPin className="w-6 h-6 mr-3 text-red-500" />
-                    UNIDADES PARTICIPANTES (8)
+                    UNIDADES PARTICIPANTES
                 </h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
                     {UNITS.map(unit => (
