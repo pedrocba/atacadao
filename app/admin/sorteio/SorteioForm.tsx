@@ -28,228 +28,172 @@ interface CupomSorteado {
   id: number;
   num_nota: string;
   nome_cliente?: string | null;
+  razao_social?: string | null;
 }
 
 export function SorteioForm({ totalCuponsElegiveis }: SorteioFormProps) {
   const [quantidade, setQuantidade] = useState<number>(1);
   const [isSorteando, setIsSorteando] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [cuponsSorteados, setCuponsSorteados] = useState<CupomSorteado[]>([]);
 
-  // --- Estados para Animação ---
-  const [cupomIdsAnimacao, setCupomIdsAnimacao] = useState<number[]>([]);
+  // Estados apenas para animação estética
   const [displayCupom, setDisplayCupom] = useState<number | string>("---");
+  const [animationIds, setAnimationIds] = useState<number[]>([]);
   const animacaoIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [mostrarAnimacao, setMostrarAnimacao] = useState<boolean>(false);
-  // ---------------------------
 
-  // Limpa o intervalo da animação quando o componente desmonta ou o sorteio termina
   useEffect(() => {
     return () => {
-      if (animacaoIntervalRef.current) {
-        clearInterval(animacaoIntervalRef.current);
-      }
+      if (animacaoIntervalRef.current) clearInterval(animacaoIntervalRef.current);
     };
   }, []);
 
-  const iniciarAnimacao = (ids: number[]) => {
-    if (ids.length === 0) {
-      setDisplayCupom("N/A"); // Não há cupons para animar
-      return;
-    }
+  const startAestheticAnimation = (ids: number[]) => {
+    if (ids.length === 0) return;
     setMostrarAnimacao(true);
-    setDisplayCupom(ids[0]); // Começa mostrando o primeiro
-
     let index = 0;
     animacaoIntervalRef.current = setInterval(() => {
       index = (index + 1) % ids.length;
       setDisplayCupom(ids[index]);
-    }, 75); // Intervalo rápido para efeito de rolagem
+    }, 80);
   };
 
-  const pararAnimacao = () => {
+  const stopAnimation = () => {
     if (animacaoIntervalRef.current) {
       clearInterval(animacaoIntervalRef.current);
       animacaoIntervalRef.current = null;
     }
-    // A exibição final será tratada após receber os resultados
   };
 
   const handleSorteio = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (isSorteando || !totalCuponsElegiveis) return;
+    if (isSorteando) return;
 
-    if (quantidade <= 0) {
-      setError("A quantidade a sortear deve ser maior que zero.");
-      return;
-    }
-
-    if (quantidade > totalCuponsElegiveis) {
-      setError(
-        `A quantidade (${quantidade}) é maior que o total de cupons elegíveis (${totalCuponsElegiveis}).`
-      );
-      return;
-    }
-
+    // Reset de estado
     setIsSorteando(true);
     setError(null);
-    setSuccessMessage(null);
     setCuponsSorteados([]);
-    setMostrarAnimacao(false); // Reseta a animação anterior
-    setDisplayCupom("Sorteando..."); // Feedback inicial
+    setDisplayCupom("SORTEANDO...");
 
     try {
-      // 1. Buscar IDs para a animação (não bloqueia o sorteio)
-      getElegibleCuponsForAnimation().then(({ cupom_ids }) => {
-        setCupomIdsAnimacao(cupom_ids);
-        if (cupom_ids.length > 0) {
-          iniciarAnimacao(cupom_ids);
-        } else {
-          // Se não houver cupons para animar, apenas mostra "Sorteando..."
-          setMostrarAnimacao(true); // Mostra a área de animação mesmo assim
-        }
-      });
+      // 1. Iniciar animação visual (apenas para efeito)
+      const { cupom_ids } = await getElegibleCuponsForAnimation();
+      if (cupom_ids.length > 0) {
+        setAnimationIds(cupom_ids);
+        startAestheticAnimation(cupom_ids);
+      }
 
-      // 2. Realizar o sorteio DE FATO
+      // 2. Chamar lógica REAL do servidor
+      // NENHUMA decisão de ganhador é feita aqui no frontend.
       const result = await realizarSorteioAction(quantidade);
 
-      pararAnimacao(); // Para a animação visual
+      stopAnimation();
 
       if (result.success && result.cuponsSorteados) {
+        // Dados reais vindos do servidor
         setCuponsSorteados(result.cuponsSorteados);
-        setSuccessMessage(
-          `Sorteio de ${result.cuponsSorteados.length} cupom(ns) realizado com sucesso!`
-        );
-        // A animação visual para, e a tabela de resultados é mostrada.
-        // O display da animação pode ser limpo ou mostrar "Concluído"
         setDisplayCupom("🎉");
       } else {
-        setError(
-          result.message || "Ocorreu um erro desconhecido durante o sorteio."
-        );
-        setDisplayCupom("Erro!"); // Indica erro na animação
+        setError(result.message || "Erro inesperado ao realizar sorteio.");
+        setDisplayCupom("ERRO");
       }
     } catch (err: any) {
-      pararAnimacao();
-      setError(err.message || "Erro inesperado ao tentar realizar o sorteio.");
-      setDisplayCupom("Erro!");
+      stopAnimation();
+      setError(err.message || "Falha na conexão com o servidor.");
+      setDisplayCupom("FALHA");
     } finally {
       setIsSorteando(false);
-      // Não resetamos mostrarAnimacao aqui para manter o último estado visual (cupom ou erro)
     }
   };
 
   return (
     <div className="space-y-6">
-      <form
-        onSubmit={handleSorteio}
-        className="space-y-4 p-4 border rounded-lg"
-      >
-        <div className="grid w-full max-w-sm items-center gap-1.5">
-          <Label htmlFor="quantidade">Quantidade de Cupons a Sortear:</Label>
-          <Input
-            type="number"
-            id="quantidade"
-            name="quantidade"
-            min="1"
-            value={quantidade}
-            onChange={(e) => setQuantidade(parseInt(e.target.value, 10) || 1)}
-            required
-            disabled={
-              isSorteando ||
-              totalCuponsElegiveis === null ||
-              totalCuponsElegiveis === 0
-            }
-            className="w-full"
-          />
-        </div>
-        <Button
-          type="submit"
-          disabled={
-            isSorteando ||
-            totalCuponsElegiveis === null ||
-            totalCuponsElegiveis === 0
-          }
-          className="w-full sm:w-auto"
-        >
-          {isSorteando ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sorteando...
-            </>
-          ) : (
-            <>
-              <Play className="mr-2 h-4 w-4" /> Iniciar Sorteio
-            </>
-          )}
-        </Button>
-        {totalCuponsElegiveis === 0 && (
-          <p className="text-sm text-muted-foreground">
-            Não há cupons elegíveis para sortear.
-          </p>
-        )}
-        {totalCuponsElegiveis === null && !isSorteando && (
-          <p className="text-sm text-destructive">
-            Não foi possível carregar a contagem de cupons.
-          </p>
-        )}
-      </form>
-
-      {/* Área da Animação */}
-      {mostrarAnimacao && (
-        <Card className="bg-gradient-to-r from-blue-100 via-purple-100 to-pink-100 dark:from-blue-900 dark:via-purple-900 dark:to-pink-900">
-          <CardHeader className="text-center">
-            <CardTitle className="text-xl text-gray-700 dark:text-gray-200">
-              Cupom da Sorte
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-center py-8">
-            <div className="text-6xl font-bold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 dark:from-blue-400 dark:via-purple-400 dark:to-pink-400 animate-pulse">
-              {displayCupom}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-xl font-bold">Painel de Sorteio</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSorteio} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="quantidade">Quantidade de ganhadores:</Label>
+              <Input
+                type="number"
+                id="quantidade"
+                min="1"
+                max={50}
+                value={quantidade}
+                onChange={(e) => setQuantidade(Math.max(1, parseInt(e.target.value) || 1))}
+                disabled={isSorteando}
+                className="max-w-[200px]"
+              />
             </div>
-          </CardContent>
-        </Card>
+
+            <Button
+              type="submit"
+              className="w-full md:w-auto h-12 px-8 text-lg font-bold bg-[#1e3a8a] transition-all hover:scale-105"
+              disabled={isSorteando || totalCuponsElegiveis === 0}
+            >
+              {isSorteando ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Processando...
+                </>
+              ) : (
+                <>
+                  <Play className="mr-2 h-5 w-5 fill-current" /> REALIZAR SORTEIO
+                </>
+              )}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      {/* Visualizer (Aesthetic only) */}
+      {(mostrarAnimacao || isSorteando) && (
+        <div className="flex flex-col items-center justify-center p-12 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-3xl border-4 border-dashed border-blue-200">
+          <p className="text-sm font-bold text-blue-400 uppercase tracking-widest mb-4">Escaneando Cupons</p>
+          <div className="text-7xl font-black text-blue-900 tabular-nums">
+            {displayCupom}
+          </div>
+        </div>
       )}
 
-      {/* Mensagens de Feedback */}
+      {/* Feedback Messages */}
       {error && (
-        <Alert variant="destructive">
-          <XCircle className="h-4 w-4" />
-          <AlertTitle>Erro no Sorteio</AlertTitle>
+        <Alert variant="destructive" className="bg-red-50 border-red-200">
+          <XCircle className="h-5 w-5" />
+          <AlertTitle className="font-bold">Falha no Processamento</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-      {successMessage && !error && (
-        <Alert variant="default">
-          <Award className="h-4 w-4" />
-          <AlertTitle>Sorteio Concluído!</AlertTitle>
-          <AlertDescription>{successMessage}</AlertDescription>
-        </Alert>
-      )}
 
-      {/* Resultados do Sorteio */}
+      {/* Winner List (Real data from server only) */}
       {cuponsSorteados.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <ListChecks className="mr-2 h-5 w-5" /> Cupons Sorteados
+        <Card className="border-green-200 bg-green-50/30 overflow-hidden">
+          <CardHeader className="bg-green-100/50">
+            <CardTitle className="flex items-center text-green-800">
+              <Award className="mr-2 h-6 w-6" /> Resultado Oficial
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>ID Cupom</TableHead>
-                  <TableHead>Nº Nota</TableHead>
-                  <TableHead>Nome Cliente</TableHead>
+                  <TableHead className="w-[100px]">ID</TableHead>
+                  <TableHead>Cliente / Razão Social</TableHead>
+                  <TableHead className="text-right">Nota Fiscal</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {cuponsSorteados.map((cupom) => (
-                  <TableRow key={cupom.id}>
-                    <TableCell className="font-medium">{cupom.id}</TableCell>
-                    <TableCell>{cupom.num_nota}</TableCell>
-                    <TableCell>{cupom.nome_cliente || "-"}</TableCell>
+                  <TableRow key={cupom.id} className="hover:bg-green-100/30 transition-colors">
+                    <TableCell className="font-black text-green-700">#{cupom.id}</TableCell>
+                    <TableCell className="font-semibold uppercase">
+                      {cupom.razao_social || cupom.nome_cliente || "NÃO IDENTIFICADO"}
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-bold text-gray-500">
+                      {cupom.num_nota}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
