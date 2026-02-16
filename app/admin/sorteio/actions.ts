@@ -11,6 +11,8 @@ interface SorteioResult {
     num_nota: string;
     nome_cliente?: string | null;
     razao_social?: string | null;
+    cod_filial?: number | string | null;
+    whatsapp?: string | null;
   }[];
 }
 
@@ -44,16 +46,21 @@ export async function realizarSorteioAction(
 
   try {
     // 2. Buscar notas fiscais validadas (Regra: valida = true)
-    // Usamos num_nota como chave de ligação conforme solicitado
     const { data: notasValidas, error: nfsError } = await supabase
       .from("notas_fiscais")
-      .select("num_nota")
+      .select("num_nota, cnpj, cod_filial")
       .eq("valida", true);
 
     if (nfsError) throw nfsError;
     if (!notasValidas || notasValidas.length === 0) {
       return { success: false, message: "Não existem notas fiscais validadas para o sorteio." };
     }
+
+    // Criar um mapa para acesso rápido ao cod_filial via num_nota+cnpj
+    const mapaNotas = new Map();
+    notasValidas.forEach(n => {
+      mapaNotas.set(`${n.num_nota}_${n.cnpj}`, n.cod_filial);
+    });
 
     const setNotasValidas = new Set(notasValidas.map(n => n.num_nota));
 
@@ -65,8 +72,7 @@ export async function realizarSorteioAction(
 
     if (cuponsError) throw cuponsError;
 
-    // 4. Cruzar dados em memória (Fallback para falta de Foreign Key / Relationship Cache)
-    // Filtramos cupons cuja nota fiscal está no conjunto de notas válidas
+    // 4. Cruzar dados em memória
     const elegiveis = cuponsDisponiveis.filter(cupom => setNotasValidas.has(cupom.num_nota));
 
     if (elegiveis.length < quantidade) {
@@ -82,7 +88,7 @@ export async function realizarSorteioAction(
 
     const cuponsSorteadosResult: NonNullable<SorteioResult['cuponsSorteados']> = [];
 
-    // 6. Persistir Sorteio e buscar dados do Vencedor
+    // 6. Persistir Sorteio e buscar dados detalhados
     for (const vencedor of selecionados) {
       // Registrar na tabela sorteios
       const { error: insertError } = await supabase
@@ -101,18 +107,31 @@ export async function realizarSorteioAction(
         .update({ sorteado_em: new Date().toISOString() })
         .eq("id", vencedor.id);
 
-      // Buscar Razão Social do Cliente vinculado ao cupom
+      // Buscar Razão Social do Cliente
       const { data: cliente } = await supabase
         .from("clientes")
         .select("razao_social, nome_fantasia")
         .eq("cnpj", vencedor.cnpj)
         .maybeSingle();
 
+      // Buscar WhatsApp do usuário vinculado ao CNPJ
+      const { data: usuario } = await supabase
+        .from("usuarios")
+        .select("whatsapp")
+        .eq("cnpj", vencedor.cnpj)
+        .limit(1)
+        .maybeSingle();
+
+      // Obter cod_filial do mapa ou do banco
+      const cod_filial = mapaNotas.get(`${vencedor.num_nota}_${vencedor.cnpj}`);
+
       cuponsSorteadosResult.push({
         id: vencedor.id,
         num_nota: vencedor.num_nota,
         razao_social: cliente?.razao_social,
-        nome_cliente: cliente?.nome_fantasia
+        nome_cliente: cliente?.nome_fantasia,
+        cod_filial: cod_filial,
+        whatsapp: usuario?.whatsapp
       });
     }
 

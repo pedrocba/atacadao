@@ -349,13 +349,35 @@ export function RaffleScreen({ totalCuponsElegiveis }: RaffleScreenProps) {
                                         {winner.razao_social || winner.nome_cliente || "Cliente Anônimo"}
                                     </h2>
 
-                                    {/* Coupon Info */}
-                                    <div className="flex items-center gap-4 mb-4 p-4 bg-white rounded-xl border border-gray-100 shadow-sm w-fit">
-                                        <Ticket className="w-8 h-8 text-red-500" />
-                                        <div>
-                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Cupom Sorteado</p>
-                                            <p className="text-2xl font-black text-gray-800">#{winner.id}</p>
+                                    {/* Contact Info */}
+                                    {winner.whatsapp && (
+                                        <div className="flex items-center gap-2 mb-6 text-2xl font-bold text-green-600 animate-pulse">
+                                            <span className="bg-green-100 px-4 py-1 rounded-full border-2 border-green-200">
+                                                WhatsApp: {winner.whatsapp}
+                                            </span>
                                         </div>
+                                    )}
+
+                                    <div className="flex flex-wrap items-center gap-4 mb-4">
+                                        {/* Coupon Info */}
+                                        <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-100 shadow-sm w-fit">
+                                            <Ticket className="w-8 h-8 text-red-500" />
+                                            <div>
+                                                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Cupom Sorteado</p>
+                                                <p className="text-2xl font-black text-gray-800">#{winner.id}</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Branch Info */}
+                                        {winner.cod_filial && (
+                                            <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-100 shadow-sm w-fit">
+                                                <MapPin className="w-8 h-8 text-blue-500" />
+                                                <div>
+                                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Cód. Filial</p>
+                                                    <p className="text-2xl font-black text-gray-800">{winner.cod_filial}</p>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <p className="text-lg text-gray-600 font-medium">
