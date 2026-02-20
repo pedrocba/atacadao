@@ -60,6 +60,7 @@ export async function realizarSorteioAction(
     const mapaNotas = new Map();
     notasValidas.forEach(n => {
       mapaNotas.set(`${n.num_nota}_${n.cnpj}`, n.cod_filial);
+      mapaNotas.set(n.num_nota, n.cod_filial);
     });
 
     const setNotasValidas = new Set(notasValidas.map(n => n.num_nota));
@@ -123,7 +124,24 @@ export async function realizarSorteioAction(
         .maybeSingle();
 
       // Obter cod_filial do mapa ou do banco
-      const cod_filial = mapaNotas.get(`${vencedor.num_nota}_${vencedor.cnpj}`);
+      let cod_filial = mapaNotas.get(`${vencedor.num_nota}_${vencedor.cnpj}`);
+      if (!cod_filial) {
+        cod_filial = mapaNotas.get(vencedor.num_nota);
+      }
+
+      // Fallback final direto no banco se ainda não tiver localizado
+      if (!cod_filial) {
+        const { data: notaData } = await supabase
+          .from("notas_fiscais")
+          .select("cod_filial")
+          .eq("num_nota", vencedor.num_nota)
+          .limit(1)
+          .maybeSingle();
+
+        if (notaData) {
+          cod_filial = notaData.cod_filial;
+        }
+      }
 
       cuponsSorteadosResult.push({
         id: vencedor.id,
